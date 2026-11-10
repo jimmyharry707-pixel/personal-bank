@@ -75,6 +75,44 @@ class FinanceServiceTests(unittest.TestCase):
         self.assertEqual(status["remaining_minor"], 15000)
         self.assertEqual(status["percent"], 25.0)
 
+    def test_budget_alerts_apply_thresholds_and_handle_zero_limits(self):
+        near_category = self.expense_category
+        over_category = self.finance.create_category("Travel", "expense", "#208060")
+        critical_category = self.finance.create_category("Repairs", "expense", "#c06040")
+        zero_category = self.finance.create_category("Gifts", "expense", "#7050a0")
+        below_category = self.finance.create_category("Dining test", "expense", "#3070a0")
+        budgets = {
+            near_category: (10_000, 8_000),
+            over_category: (10_000, 10_500),
+            critical_category: (10_000, 12_500),
+            zero_category: (0, 500),
+            below_category: (10_000, 7_900),
+        }
+        for category_id, (limit_minor, spent_minor) in budgets.items():
+            self.finance.set_budget(category_id, "2026-01", limit_minor)
+            if spent_minor:
+                self.finance.create_expense(
+                    self.checking, spent_minor, "2026-01-10", category_id
+                )
+
+        alerts = self.finance.budget_alerts(
+            "2026-01", warning_percent=80, critical_percent=120
+        )
+        by_category = {alert["category_id"]: alert for alert in alerts}
+
+        self.assertEqual(set(by_category), {near_category, over_category, critical_category, zero_category})
+        self.assertEqual(by_category[near_category]["severity"], "warning")
+        self.assertEqual(by_category[over_category]["severity"], "over")
+        self.assertEqual(by_category[critical_category]["severity"], "critical")
+        self.assertEqual(by_category[zero_category]["status"], "Over budget")
+        self.assertIsNone(by_category[zero_category]["percent"])
+
+    def test_budget_alerts_reject_invalid_thresholds(self):
+        with self.assertRaises(ValueError):
+            self.finance.budget_alerts("2026-01", warning_percent=100)
+        with self.assertRaises(ValueError):
+            self.finance.budget_alerts("2026-01", critical_percent=99)
+
     def test_bill_payment_creates_expense_and_advances_due_date(self):
         bill_id = self.finance.create_bill(
             name="Internet", amount_minor=6500, due_day=15,

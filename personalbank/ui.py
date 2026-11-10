@@ -299,6 +299,13 @@ class MainWindow(QMainWindow):
         charts.addWidget(chart_frame, 0, 0, 1, 2)
         charts.addWidget(spend_frame, 0, 2)
         layout.addLayout(charts, 1)
+        alert_heading = QLabel("Budget alerts")
+        alert_heading.setStyleSheet("font-weight: 600;")
+        layout.addWidget(alert_heading)
+        self.budget_alerts_label = QLabel("No budget alerts this month.")
+        self.budget_alerts_label.setWordWrap(True)
+        self.budget_alerts_label.setMaximumHeight(90)
+        layout.addWidget(self.budget_alerts_label)
         self._title_row(layout, "Recent activity")
         self.dashboard_table = self._table(["Date", "Type", "Account", "Payee / description", "Category", "Amount"])
         layout.addWidget(self.dashboard_table, 1)
@@ -460,6 +467,16 @@ class MainWindow(QMainWindow):
         form = QFormLayout()
         form.addRow("Display currency", self.settings_currency)
         form.addRow("Theme", self.settings_theme)
+        self.settings_budget_warning = QSpinBox()
+        self.settings_budget_warning.setRange(1, 99)
+        self.settings_budget_warning.setSuffix("%")
+        self.settings_budget_warning.setValue(self.config.budget_warning_percent)
+        self.settings_budget_critical = QSpinBox()
+        self.settings_budget_critical.setRange(100, 500)
+        self.settings_budget_critical.setSuffix("%")
+        self.settings_budget_critical.setValue(self.config.budget_critical_percent)
+        form.addRow("Near-limit warning at", self.settings_budget_warning)
+        form.addRow("Critical alert at", self.settings_budget_critical)
         layout.addLayout(form)
         save = QPushButton("Save preferences")
         save.setObjectName("primary")
@@ -849,6 +866,32 @@ class MainWindow(QMainWindow):
             (item["category_name"], item["total_minor"], item["color"]) for item in spending
         ])
         self._fill_transaction_table(self.dashboard_table, self.finance.recent_activity(8), dashboard=True)
+        self.refresh_budget_alerts()
+
+    def refresh_budget_alerts(self):
+        alerts = self.finance.budget_alerts(
+            date.today().strftime("%Y-%m"),
+            self.config.budget_warning_percent,
+            self.config.budget_critical_percent,
+        )
+        if not alerts:
+            self.budget_alerts_label.setText("No budget alerts this month.")
+            return
+
+        lines = []
+        for alert in alerts[:3]:
+            if alert["percent"] is None:
+                usage = f"{money(alert['spent_minor'], self.currency)} spent against a zero budget"
+            else:
+                usage = (
+                    f"{money(alert['spent_minor'], self.currency)} / "
+                    f"{money(alert['limit_minor'], self.currency)} "
+                    f"({alert['percent']:.0f}%)"
+                )
+            lines.append(f"{alert['status']}: {alert['category_name']} - {usage}")
+        if len(alerts) > 3:
+            lines.append(f"{len(alerts) - 3} more budget alerts")
+        self.budget_alerts_label.setText("\n".join(lines))
 
     def refresh_accounts(self):
         rows = self.finance.accounts.list(include_inactive=True)
@@ -1234,7 +1277,12 @@ class MainWindow(QMainWindow):
 
     def save_settings(self):
         self.currency = self.settings_currency.currentText()
-        self.config.update(currency=self.currency, theme=self.settings_theme.currentText())
+        self.config.update(
+            currency=self.currency,
+            theme=self.settings_theme.currentText(),
+            budget_warning_percent=self.settings_budget_warning.value(),
+            budget_critical_percent=self.settings_budget_critical.value(),
+        )
         QMessageBox.information(self, "Preferences saved", "Your preferences have been saved.")
         self.refresh_all()
 

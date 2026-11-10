@@ -20,6 +20,8 @@ class AppConfig:
     date_format: str = "yyyy-MM-dd"
     confirm_deletes: bool = True
     start_page: str = "Dashboard"
+    budget_warning_percent: int = 80
+    budget_critical_percent: int = 100
 
     @classmethod
     def load(cls) -> "AppConfig":

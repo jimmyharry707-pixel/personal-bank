@@ -304,6 +304,54 @@ class FinanceService:
             })
         return result
 
+    def budget_alerts(
+        self, month: str, warning_percent: int = 80, critical_percent: int = 100,
+    ) -> list[dict[str, Any]]:
+        warning_percent = int(warning_percent)
+        critical_percent = int(critical_percent)
+        if not 1 <= warning_percent <= 99:
+            raise ValueError("The warning threshold must be between 1 and 99 percent.")
+        if not 100 <= critical_percent <= 500:
+            raise ValueError("The critical threshold must be between 100 and 500 percent.")
+
+        alerts = []
+        for budget in self.budget_status(month):
+            limit_minor = int(budget["limit_minor"])
+            spent_minor = int(budget["spent_minor"])
+            if limit_minor == 0:
+                if spent_minor == 0:
+                    continue
+                percent = None
+                severity = "over"
+                status = "Over budget"
+            else:
+                percent = spent_minor / limit_minor * 100
+                if percent >= critical_percent:
+                    severity = "critical"
+                    status = "Critical overage" if critical_percent > 100 else "Over budget"
+                elif percent >= 100:
+                    severity = "over"
+                    status = "Over budget"
+                elif percent >= warning_percent:
+                    severity = "warning"
+                    status = "Near limit"
+                else:
+                    continue
+            alerts.append({
+                **budget,
+                "percent": percent,
+                "severity": severity,
+                "status": status,
+            })
+
+        severity_order = {"critical": 0, "over": 1, "warning": 2}
+        alerts.sort(key=lambda item: (
+            severity_order[item["severity"]],
+            -(item["percent"] or 0),
+            item["category_name"].casefold(),
+        ))
+        return alerts
+
     # Bills
     def create_bill(self, *, name: str, amount_minor: int, due_day: int,
                     category_id: int | None, account_id: int | None,
