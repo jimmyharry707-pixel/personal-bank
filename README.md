@@ -15,6 +15,7 @@ It is a personal recordkeeping tool, not a bank, payment processor, brokerage, l
 - Income and expense categories with archive support.
 - Monthly category budgets with spent, remaining, and utilization values.
 - Recurring bill reminders and manual payment recording.
+- Monthly finance calendar for bill due dates, recurring transactions, and subscription renewals, with overdue items highlighted. The calendar is read-only.
 - Savings goals and contribution tracking.
 
 ### Advanced finance management

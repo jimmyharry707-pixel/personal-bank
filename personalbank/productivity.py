@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import calendar
 import csv
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from .advanced import advance_date
+from .advanced import RecurringTransactionService, advance_date
 from .domain import now_iso, today_iso, validate_date
 
 
@@ -514,3 +515,86 @@ class CategorizationRuleService:
         if not row:
             raise ValueError("Categorization rule was not found.")
         self.db.execute("UPDATE categorization_rules SET active = 0 WHERE id = ?", (rule_id,))
+
+
+class FinanceCalendarService:
+    """Collect active bills, recurring entries, and renewals for one month."""
+
+    def __init__(self, finance):
+        self.finance = finance
+        self.recurring = RecurringTransactionService(finance)
+        self.subscriptions = SubscriptionService(finance)
+
+    def events(self, month: str) -> list[dict[str, Any]]:
+        month_start = date.fromisoformat(f"{month}-01")
+        month_end = date(
+            month_start.year,
+            month_start.month,
+            calendar.monthrange(month_start.year, month_start.month)[1],
+        )
+        events: list[dict[str, Any]] = []
+
+        def append_schedule(
+            row: Any,
+            *,
+            source_type: str,
+            date_field: str,
+            kind: str,
+            anchor_day: int,
+            account_id: int | None,
+            currency: str | None = None,
+        ) -> None:
+            due = date.fromisoformat(row[date_field])
+            end_date = None
+            if source_type == "recurring" and row["end_date"]:
+                end_date = date.fromisoformat(row["end_date"])
+            account = self.finance.accounts.get(account_id) if account_id else None
+            while due <= month_end and (end_date is None or due <= end_date):
+                overdue = due < month_start
+                events.append({
+                    "date": month_start.isoformat() if overdue else due.isoformat(),
+                    "due_date": due.isoformat(),
+                    "source_type": source_type,
+                    "source_id": int(row["id"]),
+                    "name": row["name"],
+                    "kind": kind,
+                    "amount_minor": int(row["amount_minor"]),
+                    "currency": currency or (account["currency"] if account else None),
+                    "overdue": overdue,
+                })
+                next_due = advance_date(due.isoformat(), row["frequency"], anchor_day)
+                due = date.fromisoformat(next_due)
+
+        for row in self.recurring.list():
+            append_schedule(
+                row,
+                source_type="recurring",
+                date_field="next_due_date",
+                kind=row["kind"],
+                anchor_day=int(row["anchor_day"]),
+                account_id=int(row["account_id"]),
+            )
+
+        for row in self.finance.bills.list():
+            append_schedule(
+                row,
+                source_type="bill",
+                date_field="next_due_date",
+                kind="expense",
+                anchor_day=int(row["due_day"]),
+                account_id=int(row["account_id"]) if row["account_id"] else None,
+            )
+
+        for row in self.subscriptions.list():
+            append_schedule(
+                row,
+                source_type="subscription",
+                date_field="next_renewal_date",
+                kind="expense",
+                anchor_day=date.fromisoformat(row["next_renewal_date"]).day,
+                account_id=int(row["account_id"]) if row["account_id"] else None,
+                currency=str(row["currency"]),
+            )
+
+        events.sort(key=lambda item: (item["date"], item["due_date"], item["name"].casefold()))
+        return events

@@ -2,9 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from personalbank.advanced import RecurringTransactionService
 from personalbank.db import Database
 from personalbank.productivity import (
     CategorizationRuleService,
+    FinanceCalendarService,
     SubscriptionService,
     TaxService,
 )
@@ -22,7 +24,9 @@ class ProductivityFeatureTests(unittest.TestCase):
         )
         self.expense_category = self.finance.categories.list(kind="expense")[0]["id"]
         self.income_category = self.finance.categories.list(kind="income")[0]["id"]
+        self.recurring = RecurringTransactionService(self.finance)
         self.subscriptions = SubscriptionService(self.finance)
+        self.calendar = FinanceCalendarService(self.finance)
         self.tax = TaxService(self.finance)
         self.rules = CategorizationRuleService(self.finance)
 
@@ -95,6 +99,45 @@ class ProductivityFeatureTests(unittest.TestCase):
         subscription_id = self.create_subscription()
         self.subscriptions.archive(subscription_id)
         self.assertEqual(self.subscriptions.summary()["active_count"], 0)
+
+    def test_finance_calendar_collects_month_occurrences_without_posting(self):
+        self.recurring.create(
+            name="Rent", kind="expense", account_id=self.checking,
+            category_id=self.expense_category, amount_minor=100_000,
+            frequency="monthly", next_due_date="2026-01-31",
+            end_date="2026-03-31",
+        )
+        self.finance.create_bill(
+            name="Internet", amount_minor=6_500, due_day=10,
+            category_id=self.expense_category, account_id=self.checking,
+            frequency="monthly", auto_post=False, next_due_date="2026-03-10",
+        )
+        self.create_subscription(
+            next_renewal_date="2026-02-28", cancel_by_date="2026-02-27",
+        )
+
+        events = self.calendar.events("2026-03")
+        occurrences = {
+            (event["source_type"], event["due_date"]): event for event in events
+        }
+
+        self.assertEqual(len(events), 6)
+        self.assertEqual(
+            set(occurrences),
+            {
+                ("recurring", "2026-01-31"),
+                ("recurring", "2026-02-28"),
+                ("recurring", "2026-03-31"),
+                ("bill", "2026-03-10"),
+                ("subscription", "2026-02-28"),
+                ("subscription", "2026-03-28"),
+            },
+        )
+        self.assertTrue(occurrences[("recurring", "2026-01-31")]["overdue"])
+        self.assertEqual(occurrences[("recurring", "2026-01-31")]["date"], "2026-03-01")
+        self.assertEqual(occurrences[("bill", "2026-03-10")]["currency"], "USD")
+        self.assertEqual(self.finance.list_transactions(), [])
+        self.assertEqual(self.finance.account_balance(self.checking), 500_000)
 
     def test_subscription_validates_cancel_deadline(self):
         with self.assertRaises(ValueError):

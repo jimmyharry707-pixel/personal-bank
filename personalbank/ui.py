@@ -3,9 +3,10 @@ from __future__ import annotations
 import calendar
 from datetime import date
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QDate, Qt
+from PyQt6.QtGui import QColor, QTextCharFormat
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QComboBox, QDateEdit, QDoubleSpinBox,
+    QAbstractItemView, QCalendarWidget, QCheckBox, QComboBox, QDateEdit, QDoubleSpinBox,
     QFormLayout, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPushButton, QScrollArea, QSpinBox,
     QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -32,7 +33,9 @@ from .advanced_dialogs import (
     SubscriptionDialog, SubscriptionPriceDialog, SubscriptionHistoryDialog,
     TaxRecordDialog, CategorizationRuleDialog,
 )
-from .productivity import SubscriptionService, TaxService, CategorizationRuleService
+from .productivity import (
+    FinanceCalendarService, SubscriptionService, TaxService, CategorizationRuleService,
+)
 
 
 STYLE = """
@@ -74,7 +77,7 @@ QLabel#cardValue { color: #0f172a; font-size: 22px; font-weight: 700; }
 
 NAV_ITEMS = [
     ("Dashboard", "▦"), ("Accounts", "▣"), ("Transactions", "⇄"),
-    ("Budgets", "◷"), ("Bills", "▤"), ("Recurring", "⟳"),
+    ("Budgets", "◷"), ("Bills", "▤"), ("Calendar", "▦"), ("Recurring", "⟳"),
     ("Cash flow forecast", "⌁"), ("Reconciliation", "≋"), ("Debt planner", "↘"),
     ("Investments", "◈"), ("Savings goals", "◎"),
     ("Net worth", "◇"), ("Categories", "▧"),
@@ -119,6 +122,7 @@ class MainWindow(QMainWindow):
         self.net_worth_service = NetWorthService(finance, self.investment_service)
         self.maintenance_service = MaintenanceService(finance.db)
         self.subscription_service = SubscriptionService(finance)
+        self.calendar_service = FinanceCalendarService(finance)
         self.tax_service = TaxService(finance)
         self.rule_service = CategorizationRuleService(finance)
         self.current_reconciliation_session_id = None
@@ -199,6 +203,7 @@ class MainWindow(QMainWindow):
         self._build_transactions()
         self._build_budgets()
         self._build_bills()
+        self._build_finance_calendar()
         self._build_goals()
         self._build_reports()
         self._build_settings()
@@ -225,6 +230,7 @@ class MainWindow(QMainWindow):
             "Transactions": "Record and review income, expenses, and transfers",
             "Budgets": "Set monthly spending limits by category",
             "Bills": "Keep track of recurring payments",
+            "Calendar": "See bills, recurring entries, and subscription renewals by date",
             "Recurring": "Schedule income and expenses for manual posting",
             "Cash flow forecast": "Project upcoming bills and recurring cash flow",
             "Reconciliation": "Match account activity to your statements",
@@ -238,6 +244,8 @@ class MainWindow(QMainWindow):
             "Settings": "Manage local data, backups, and preferences",
         }
         self.header_subtitle.setText(subtitles.get(page_name, ""))
+        if page_name == "Calendar":
+            self.refresh_finance_calendar()
         for name, button in self.nav_buttons.items():
             button.setChecked(name == page_name)
 
@@ -379,6 +387,34 @@ class MainWindow(QMainWindow):
         row.addWidget(archive)
         row.addStretch()
         layout.addLayout(row)
+
+    def _build_finance_calendar(self):
+        page, layout = self.pages["Calendar"]
+        body = QHBoxLayout()
+        self.finance_calendar_widget = QCalendarWidget()
+        self.finance_calendar_widget.setMinimumWidth(340)
+        self.finance_calendar_widget.setGridVisible(True)
+        self.finance_calendar_widget.setFirstDayOfWeek(Qt.DayOfWeek.Monday)
+        self.finance_calendar_widget.setVerticalHeaderFormat(
+            QCalendarWidget.VerticalHeaderFormat.NoVerticalHeader
+        )
+        self._finance_calendar_events_by_date = {}
+        self._finance_calendar_highlight_dates = []
+        self.finance_calendar_widget.currentPageChanged.connect(self.refresh_finance_calendar)
+        self.finance_calendar_widget.clicked.connect(self.refresh_finance_calendar_day)
+        body.addWidget(self.finance_calendar_widget, 1)
+
+        details = QVBoxLayout()
+        self.finance_calendar_day_label = QLabel("Select a date")
+        self.finance_calendar_day_label.setObjectName("pageTitle")
+        details.addWidget(self.finance_calendar_day_label)
+        self.finance_calendar_empty_label = QLabel("No scheduled items")
+        self.finance_calendar_empty_label.setObjectName("muted")
+        details.addWidget(self.finance_calendar_empty_label)
+        self.finance_calendar_table = self._table(["Source", "Item", "Amount", "Status"])
+        details.addWidget(self.finance_calendar_table, 1)
+        body.addLayout(details, 1)
+        layout.addLayout(body, 1)
 
     def _build_goals(self):
         page, layout = self.pages["Savings goals"]
@@ -780,6 +816,7 @@ class MainWindow(QMainWindow):
         self.refresh_transactions()
         self.refresh_budgets()
         self.refresh_bills()
+        self.refresh_finance_calendar()
         self.refresh_goals()
         self.refresh_reports()
         self.refresh_recurring()
@@ -902,6 +939,65 @@ class MainWindow(QMainWindow):
                 if column == 0:
                     cell.setData(Qt.ItemDataRole.UserRole, int(row["id"]))
                 self.bills_table.setItem(index, column, cell)
+
+    def refresh_finance_calendar(self, year: int | None = None, month: int | None = None):
+        if not hasattr(self, "finance_calendar_widget"):
+            return
+        year = year or self.finance_calendar_widget.yearShown()
+        month = month or self.finance_calendar_widget.monthShown()
+        month_key = f"{year:04d}-{month:02d}"
+
+        for day in self._finance_calendar_highlight_dates:
+            self.finance_calendar_widget.setDateTextFormat(
+                QDate.fromString(day, "yyyy-MM-dd"), QTextCharFormat()
+            )
+
+        events = self.calendar_service.events(month_key)
+        events_by_date = {}
+        for event in events:
+            events_by_date.setdefault(event["date"], []).append(event)
+        self._finance_calendar_events_by_date = events_by_date
+        self._finance_calendar_highlight_dates = sorted(events_by_date)
+
+        for day, day_events in events_by_date.items():
+            text_format = QTextCharFormat()
+            overdue = any(event["overdue"] for event in day_events)
+            text_format.setBackground(QColor("#fee2e2" if overdue else "#dbeafe"))
+            text_format.setForeground(QColor("#991b1b" if overdue else "#1d4ed8"))
+            text_format.setToolTip("\n".join(event["name"] for event in day_events))
+            self.finance_calendar_widget.setDateTextFormat(
+                QDate.fromString(day, "yyyy-MM-dd"), text_format
+            )
+
+        selected = self.finance_calendar_widget.selectedDate()
+        if selected.year() != year or selected.month() != month:
+            selected = QDate(year, month, 1)
+            self.finance_calendar_widget.setSelectedDate(selected)
+        self.refresh_finance_calendar_day(selected)
+
+    def refresh_finance_calendar_day(self, selected: QDate | None = None):
+        if not hasattr(self, "finance_calendar_table"):
+            return
+        selected = selected or self.finance_calendar_widget.selectedDate()
+        day = selected.toString("yyyy-MM-dd")
+        events = self._finance_calendar_events_by_date.get(day, [])
+        self.finance_calendar_day_label.setText(
+            f"{selected.toString('dddd, MMMM d')} · {len(events)} scheduled"
+        )
+        self.finance_calendar_empty_label.setVisible(not events)
+        self.finance_calendar_table.setRowCount(0)
+        for event in events:
+            index = self.finance_calendar_table.rowCount()
+            self.finance_calendar_table.insertRow(index)
+            status = f"Overdue (due {event['due_date']})" if event["overdue"] else "Scheduled"
+            values = [
+                humanize(event["source_type"]),
+                event["name"],
+                money(int(event["amount_minor"]), event["currency"] or self.currency),
+                status,
+            ]
+            for column, value in enumerate(values):
+                self.finance_calendar_table.setItem(index, column, QTableWidgetItem(str(value)))
 
     def refresh_goals(self):
         rows = self.finance.goals.list(include_inactive=True)
