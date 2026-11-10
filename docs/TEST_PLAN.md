@@ -45,6 +45,7 @@ The tests create temporary database files and clean them up after each test clas
 - Preventing edits/deletes of linked investment and reconciled transactions
 - Net-worth calculation and dated snapshot upsert
 - Manual currency-rate validation, inverse rates, rounding, missing-rate reporting, and converted account/investment/debt valuation
+- Scenario preview math and no-ledger-mutation, adjustment validation/editing, comparison compatibility, duplicate/cascade behavior, CSV export, and schema upgrade
 - SQLite integrity and foreign-key checks
 
 ## Manual GUI smoke test
@@ -57,13 +58,14 @@ Because the automated test suite does not launch a graphical Qt session, perform
 4. Attach an image or PDF receipt to a transaction, open it, then remove it.
 5. Create a monthly budget and recurring schedule.
 6. Generate a cash-flow forecast and verify it does not add ledger transactions.
-7. Start a reconciliation, check the relevant items, and close it when the difference reaches zero.
-8. Create a debt plan, view its schedule, and record a payment.
-9. Add a security, record a buy, update the manual price, and record a partial sale.
-10. Save a net-worth snapshot.
-11. Enter a manual exchange rate and verify the Currency Valuation page converts matching assets and liabilities while marking other rates as missing.
-12. Export transactions, create a backup, and run the database health check.
-13. Close and reopen the app to confirm persistence.
+7. Create two financial scenarios, add one-time and monthly assumptions, compare their projected balances, and export a scenario CSV.
+8. Start a reconciliation, check the relevant items, and close it when the difference reaches zero.
+9. Create a debt plan, view its schedule, and record a payment.
+10. Add a security, record a buy, update the manual price, and record a partial sale.
+11. Save a net-worth snapshot.
+12. Enter a manual exchange rate and verify the Currency Valuation page converts matching assets and liabilities while marking other rates as missing.
+13. Export transactions, create a backup, and run the database health check.
+14. Close and reopen the app to confirm persistence.
 
 ## Expected limitations
 

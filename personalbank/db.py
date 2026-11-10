@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterator, Any
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 SCHEMA = """
@@ -229,6 +229,32 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
     UNIQUE(from_currency, to_currency)
 );
 
+CREATE TABLE IF NOT EXISTS financial_scenarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    account_id INTEGER NOT NULL REFERENCES accounts(id),
+    start_date TEXT NOT NULL,
+    horizon_months INTEGER NOT NULL CHECK (horizon_months BETWEEN 1 AND 60),
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS scenario_adjustments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scenario_id INTEGER NOT NULL REFERENCES financial_scenarios(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('income', 'expense')),
+    cadence TEXT NOT NULL CHECK (cadence IN ('one_time', 'monthly')),
+    amount_minor INTEGER NOT NULL CHECK (amount_minor > 0),
+    start_month INTEGER NOT NULL CHECK (start_month BETWEEN 1 AND 60),
+    end_month INTEGER CHECK (end_month BETWEEN 1 AND 60),
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (end_month IS NULL OR end_month >= start_month)
+);
+
 
 -- Subscription contracts are reminders only; renewal posting is user-confirmed.
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -304,6 +330,8 @@ CREATE INDEX IF NOT EXISTS idx_investment_trade_security ON investment_trades(se
 CREATE INDEX IF NOT EXISTS idx_investment_trade_account ON investment_trades(investment_account_id, trade_date);
 CREATE INDEX IF NOT EXISTS idx_net_worth_date ON net_worth_snapshots(snapshot_date);
 CREATE INDEX IF NOT EXISTS idx_exchange_rates_pair ON exchange_rates(from_currency, to_currency);
+CREATE INDEX IF NOT EXISTS idx_scenarios_account ON financial_scenarios(account_id, name);
+CREATE INDEX IF NOT EXISTS idx_scenario_adjustments_scenario ON scenario_adjustments(scenario_id, start_month);
 """
 
 

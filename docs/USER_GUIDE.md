@@ -52,6 +52,12 @@ Use **Cash flow forecast** to estimate upcoming income and expenses from active 
 
 The forecast is read-only. It does not create transactions or reserve account funds. Forecast totals are estimates and may differ from actual amounts.
 
+## Scenario planner
+
+Create a scenario for one account, choose its start date and a horizon of up to 60 months, then add one-time or monthly income and expense assumptions. Monthly assumptions can end early or continue through the full horizon. The planner compares your assumptions with the selected account's baseline of active bills and recurring schedules, and shows projected closing balances and any first month below zero.
+
+Select multiple scenarios with Ctrl-click or Shift-click and choose **Compare selected**. Scenarios must use the same account, start date, and horizon. Use **Duplicate** to create a named copy with its assumptions, or **Export projection** to save the selected monthly comparison as CSV. Scenario assumptions are hypothetical and do not change transactions, budgets, or account balances.
+
 ## Bank reconciliation
 
 Open **Reconciliation**, choose an account, and start a session with the statement ending date and ending balance. Check the transactions that appear on the statement. The summary shows the calculated cleared balance and remaining difference.

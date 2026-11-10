@@ -12,13 +12,13 @@ from PyQt6.QtWidgets import (
     QFormLayout, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPushButton, QScrollArea, QSpinBox,
     QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
-    QFileDialog, QDialog,
+    QFileDialog, QDialog, QInputDialog,
 )
 
 from .backup import BackupService
 from .attachment_dialogs import ReceiptAttachmentDialog
 from .attachments import ReceiptAttachmentService
-from .charts import BarChart, HorizontalBars
+from .charts import BarChart, HorizontalBars, ScenarioBalanceChart
 from .csv_tools import CsvService
 from .dialogs import (
     AccountDialog, BillDialog, BudgetDialog, ContributionDialog, GoalDialog,
@@ -32,6 +32,7 @@ from .advanced import (
 )
 from .advanced_dialogs import (
     CategoryDialog, DebtPaymentDialog, DebtPlanDialog, DebtScheduleDialog,
+    FinancialScenarioDialog, ScenarioAdjustmentDialog,
     NetWorthSnapshotDialog, ReconciliationStartDialog, RecurringDialog,
     SecurityDialog, SecurityPriceDialog, TradeDialog, TransactionEditDialog,
     SubscriptionDialog, SubscriptionPriceDialog, SubscriptionHistoryDialog,
@@ -41,6 +42,7 @@ from .productivity import (
     FinanceCalendarService, SubscriptionService, TaxService, CategorizationRuleService,
 )
 from .currency import CurrencyValuationService
+from .scenarios import FinancialScenarioService
 
 
 STYLE = """
@@ -84,6 +86,7 @@ NAV_ITEMS = [
     ("Dashboard", "▦"), ("Accounts", "▣"), ("Transactions", "⇄"),
     ("Budgets", "◷"), ("Bills", "▤"), ("Calendar", "▦"), ("Recurring", "⟳"),
     ("Cash flow forecast", "⌁"), ("Reconciliation", "≋"), ("Debt planner", "↘"),
+    ("Scenario planner", "↗"),
     ("Investments", "◈"), ("Savings goals", "◎"),
     ("Net worth", "◇"), ("Categories", "▧"),
     ("Currency valuation", "¤"),
@@ -131,6 +134,7 @@ class MainWindow(QMainWindow):
         self.investment_service = InvestmentService(finance)
         self.net_worth_service = NetWorthService(finance, self.investment_service)
         self.currency_service = CurrencyValuationService(finance, self.investment_service)
+        self.scenario_service = FinancialScenarioService(finance, self.forecast_service)
         self.maintenance_service = MaintenanceService(finance.db)
         self.subscription_service = SubscriptionService(finance)
         self.calendar_service = FinanceCalendarService(finance)
@@ -220,6 +224,7 @@ class MainWindow(QMainWindow):
         self._build_settings()
         self._build_recurring()
         self._build_cash_flow_forecast()
+        self._build_scenario_planner()
         self._build_reconciliation()
         self._build_debt_planner()
         self._build_investments()
@@ -245,6 +250,7 @@ class MainWindow(QMainWindow):
             "Calendar": "See bills, recurring entries, and subscription renewals by date",
             "Recurring": "Schedule income and expenses for manual posting",
             "Cash flow forecast": "Project upcoming bills and recurring cash flow",
+            "Scenario planner": "Compare saved what-if assumptions without changing your ledger",
             "Reconciliation": "Match account activity to your statements",
             "Debt planner": "Track balances, interest, and payoff projections",
             "Investments": "Track securities, holdings, trades, and manual prices",
@@ -580,6 +586,111 @@ class MainWindow(QMainWindow):
         ])
         layout.addWidget(self.forecast_table, 1)
         layout.addWidget(QLabel("Forecasts are estimates only. Nothing is posted automatically."))
+
+    def _build_scenario_planner(self):
+        page, page_layout = self.pages["Scenario planner"]
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(0, 0, 8, 0)
+        scroll.setWidget(content)
+        page_layout.addWidget(scroll)
+        description = QLabel(
+            "Model one account at a time. Baseline uses active bills and recurring schedules; "
+            "assumptions are hypothetical and never create transactions."
+        )
+        description.setWordWrap(True)
+        description.setObjectName("muted")
+        layout.addWidget(description)
+
+        scenario_actions = QHBoxLayout()
+        add_scenario = QPushButton("Add scenario")
+        add_scenario.setObjectName("primary")
+        add_scenario.clicked.connect(self.add_financial_scenario)
+        edit_scenario = QPushButton("Edit selected")
+        edit_scenario.setObjectName("secondary")
+        edit_scenario.clicked.connect(self.edit_financial_scenario)
+        duplicate_scenario = QPushButton("Duplicate")
+        duplicate_scenario.setObjectName("secondary")
+        duplicate_scenario.clicked.connect(self.duplicate_financial_scenario)
+        delete_scenario = QPushButton("Delete selected")
+        delete_scenario.setObjectName("secondary")
+        delete_scenario.clicked.connect(self.delete_financial_scenario)
+        compare = QPushButton("Compare selected")
+        compare.setObjectName("secondary")
+        compare.clicked.connect(self.compare_financial_scenarios)
+        export = QPushButton("Export projection")
+        export.setObjectName("secondary")
+        export.clicked.connect(self.export_scenario_projection)
+        scenario_actions.addWidget(add_scenario)
+        scenario_actions.addWidget(edit_scenario)
+        scenario_actions.addWidget(duplicate_scenario)
+        scenario_actions.addWidget(delete_scenario)
+        scenario_actions.addStretch()
+        scenario_actions.addWidget(compare)
+        scenario_actions.addWidget(export)
+        layout.addLayout(scenario_actions)
+
+        self.scenarios_table = self._table([
+            "Scenario", "Account", "Currency", "Starts", "Horizon",
+        ])
+        self.scenarios_table.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection
+        )
+        self.scenarios_table.currentCellChanged.connect(
+            self.refresh_scenario_details
+        )
+        self.scenarios_table.setMaximumHeight(150)
+        layout.addWidget(self.scenarios_table)
+
+        assumption_heading = QHBoxLayout()
+        assumption_heading.addWidget(QLabel("Scenario assumptions"))
+        assumption_heading.addStretch()
+        add_assumption = QPushButton("Add assumption")
+        add_assumption.setObjectName("primary")
+        add_assumption.clicked.connect(self.add_scenario_adjustment)
+        edit_assumption = QPushButton("Edit")
+        edit_assumption.setObjectName("secondary")
+        edit_assumption.clicked.connect(self.edit_scenario_adjustment)
+        delete_assumption = QPushButton("Remove")
+        delete_assumption.setObjectName("secondary")
+        delete_assumption.clicked.connect(self.delete_scenario_adjustment)
+        assumption_heading.addWidget(add_assumption)
+        assumption_heading.addWidget(edit_assumption)
+        assumption_heading.addWidget(delete_assumption)
+        layout.addLayout(assumption_heading)
+        self.scenario_adjustments_table = self._table([
+            "Assumption", "Type", "Schedule", "Amount", "Months",
+        ])
+        self.scenario_adjustments_table.setMaximumHeight(145)
+        layout.addWidget(self.scenario_adjustments_table)
+
+        summary = QGridLayout()
+        self.scenario_baseline_card = MetricCard("BASELINE ENDING BALANCE", "—")
+        self.scenario_projected_card = MetricCard("SCENARIO ENDING BALANCE", "—")
+        self.scenario_difference_card = MetricCard("SCENARIO DIFFERENCE", "—")
+        summary.addWidget(self.scenario_baseline_card, 0, 0)
+        summary.addWidget(self.scenario_projected_card, 0, 1)
+        summary.addWidget(self.scenario_difference_card, 0, 2)
+        layout.addLayout(summary)
+        self.scenario_status = QLabel("Select a scenario to preview its monthly balances.")
+        self.scenario_status.setWordWrap(True)
+        self.scenario_status.setObjectName("muted")
+        layout.addWidget(self.scenario_status)
+        self.scenario_balance_chart = ScenarioBalanceChart()
+        layout.addWidget(self.scenario_balance_chart)
+        self.scenario_projection_table = self._table([
+            "Month", "Baseline income", "Baseline expenses", "Plan income",
+            "Plan expenses", "Baseline close", "Scenario close", "Difference",
+        ])
+        layout.addWidget(self.scenario_projection_table, 1)
+        self.scenario_comparison_table = self._table([
+            "Scenario", "Ending balance", "Difference vs baseline", "First negative month",
+        ])
+        self.scenario_comparison_table.setMaximumHeight(110)
+        layout.addWidget(self.scenario_comparison_table)
 
     def _build_reconciliation(self):
         page, layout = self.pages["Reconciliation"]
@@ -920,6 +1031,7 @@ class MainWindow(QMainWindow):
         self.refresh_reports()
         self.refresh_recurring()
         self.refresh_cash_flow_forecast()
+        self.refresh_scenarios()
         self.refresh_reconciliation()
         self.refresh_debts()
         self.refresh_investments()
@@ -1530,6 +1642,293 @@ class MainWindow(QMainWindow):
                     self.forecast_table.setItem(index, column, QTableWidgetItem(str(value)))
         except Exception as exc:
             self.forecast_range_label.setText(f"Forecast unavailable: {exc}")
+
+    def refresh_scenarios(self, preferred_id: int | None = None):
+        if not hasattr(self, "scenarios_table"):
+            return
+        selected_id = preferred_id or self._selected_id(self.scenarios_table)
+        rows = self.scenario_service.list()
+        self.scenarios_table.blockSignals(True)
+        self.scenarios_table.setRowCount(0)
+        selected_row = None
+        for scenario in rows:
+            index = self.scenarios_table.rowCount()
+            self.scenarios_table.insertRow(index)
+            values = [
+                scenario["name"], scenario["account_name"], scenario["currency"],
+                scenario["start_date"], f"{scenario['horizon_months']} months",
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                if column == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, int(scenario["id"]))
+                self.scenarios_table.setItem(index, column, item)
+            if selected_id is not None and int(scenario["id"]) == int(selected_id):
+                selected_row = index
+        if rows and selected_row is None:
+            selected_row = 0
+        if selected_row is not None:
+            self.scenarios_table.selectRow(selected_row)
+        self.scenarios_table.blockSignals(False)
+        self.scenario_comparison_table.setRowCount(0)
+        self.refresh_scenario_details()
+
+    def refresh_scenario_details(self, current_row: int = -1, *_args):
+        scenario_id = self._selected_id(self.scenarios_table)
+        self.scenario_adjustments_table.setRowCount(0)
+        self.scenario_projection_table.setRowCount(0)
+        self.scenario_comparison_table.setRowCount(0)
+        if not scenario_id:
+            for card in (
+                self.scenario_baseline_card,
+                self.scenario_projected_card,
+                self.scenario_difference_card,
+            ):
+                card.set_value("—")
+            self.scenario_status.setText("Create or select a scenario to preview a plan.")
+            self.scenario_balance_chart.set_values([])
+            return
+        try:
+            scenario = self.scenario_service.get(int(scenario_id))
+            currency = scenario["currency"]
+            for adjustment in self.scenario_service.adjustments(int(scenario_id)):
+                index = self.scenario_adjustments_table.rowCount()
+                self.scenario_adjustments_table.insertRow(index)
+                start = int(adjustment["start_month"])
+                end = adjustment["end_month"]
+                months = (
+                    f"{start} only" if adjustment["cadence"] == "one_time" else
+                    f"{start}-{end}" if end is not None else f"{start}+"
+                )
+                values = [
+                    adjustment["name"], humanize(adjustment["kind"]),
+                    humanize(adjustment["cadence"]),
+                    money(int(adjustment["amount_minor"]), currency), months,
+                ]
+                for column, value in enumerate(values):
+                    item = QTableWidgetItem(str(value))
+                    if column == 0:
+                        item.setData(Qt.ItemDataRole.UserRole, int(adjustment["id"]))
+                    self.scenario_adjustments_table.setItem(index, column, item)
+
+            preview = self.scenario_service.preview(int(scenario_id))
+            self.scenario_balance_chart.set_values([
+                (
+                    month["month"][2:],
+                    month["baseline_balance_minor"],
+                    month["scenario_balance_minor"],
+                )
+                for month in preview["months"]
+            ])
+            self.scenario_baseline_card.set_value(
+                money(preview["ending_baseline_minor"], currency),
+                f"Opening {money(preview['opening_balance_minor'], currency)}",
+            )
+            self.scenario_projected_card.set_value(
+                money(preview["ending_scenario_minor"], currency), scenario["account_name"]
+            )
+            self.scenario_difference_card.set_value(
+                money(preview["ending_difference_minor"], currency), "Scenario minus baseline"
+            )
+            negative = preview["first_negative_month"]
+            self.scenario_status.setText(
+                f"First projected negative balance: {negative}. Nothing is posted to the ledger."
+                if negative else
+                "No negative monthly closing balance is projected. Nothing is posted to the ledger."
+            )
+            for month in preview["months"]:
+                index = self.scenario_projection_table.rowCount()
+                self.scenario_projection_table.insertRow(index)
+                values = [
+                    month["month"],
+                    money(month["baseline_income_minor"], currency),
+                    money(month["baseline_expenses_minor"], currency),
+                    money(month["planned_income_minor"], currency),
+                    money(month["planned_expenses_minor"], currency),
+                    money(month["baseline_balance_minor"], currency),
+                    money(month["scenario_balance_minor"], currency),
+                    money(month["difference_minor"], currency),
+                ]
+                for column, value in enumerate(values):
+                    self.scenario_projection_table.setItem(
+                        index, column, QTableWidgetItem(str(value))
+                    )
+        except Exception as exc:
+            self.scenario_status.setText(f"Scenario preview unavailable: {exc}")
+
+    def export_scenario_projection(self):
+        scenario_id = self._selected_id(self.scenarios_table)
+        if not scenario_id:
+            QMessageBox.information(self, "Select a scenario", "Choose a scenario to export.")
+            return
+        scenario = self.scenario_service.get(int(scenario_id))
+        safe_name = "".join(
+            character if character.isalnum() or character in "-_" else "_"
+            for character in scenario["name"]
+        ).strip("_") or "scenario"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export scenario projection", f"{safe_name}-projection.csv",
+            "CSV files (*.csv)",
+        )
+        if not path:
+            return
+        try:
+            row_count = self.scenario_service.export_csv(int(scenario_id), path)
+            QMessageBox.information(
+                self, "Projection exported", f"Exported {row_count} projected months to:\n{path}"
+            )
+        except Exception as exc:
+            self._show_error(exc)
+
+    def add_financial_scenario(self):
+        accounts = self.finance.accounts.list()
+        if not accounts:
+            QMessageBox.information(
+                self, "Create an account", "Add an account before creating a scenario."
+            )
+            self.navigate("Accounts")
+            return
+        dialog = FinancialScenarioDialog(self, accounts)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                scenario_id = self.scenario_service.create(**dialog.values())
+                self.refresh_scenarios(scenario_id)
+            except Exception as exc:
+                self._show_error(exc)
+
+    def edit_financial_scenario(self):
+        scenario_id = self._selected_id(self.scenarios_table)
+        if not scenario_id:
+            QMessageBox.information(self, "Select a scenario", "Choose a scenario to edit.")
+            return
+        scenario = self.scenario_service.get(int(scenario_id))
+        dialog = FinancialScenarioDialog(self, self.finance.accounts.list(), scenario)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                self.scenario_service.update(int(scenario_id), **dialog.values())
+                self.refresh_scenarios(int(scenario_id))
+            except Exception as exc:
+                self._show_error(exc)
+
+    def duplicate_financial_scenario(self):
+        scenario_id = self._selected_id(self.scenarios_table)
+        if not scenario_id:
+            QMessageBox.information(
+                self, "Select a scenario", "Choose a scenario to duplicate."
+            )
+            return
+        scenario = self.scenario_service.get(int(scenario_id))
+        name, accepted = QInputDialog.getText(
+            self, "Duplicate scenario", "New scenario name:",
+            text=f"{scenario['name']} copy",
+        )
+        if not accepted:
+            return
+        try:
+            duplicate_id = self.scenario_service.duplicate(int(scenario_id), name)
+            self.refresh_scenarios(duplicate_id)
+        except Exception as exc:
+            self._show_error(exc)
+
+    def delete_financial_scenario(self):
+        scenario_id = self._selected_id(self.scenarios_table)
+        if not scenario_id:
+            QMessageBox.information(self, "Select a scenario", "Choose a scenario to delete.")
+            return
+        if QMessageBox.question(
+            self, "Delete scenario",
+            "Delete this scenario and all of its assumptions? Actual financial records are unchanged.",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.scenario_service.delete(int(scenario_id))
+            self.refresh_scenarios()
+        except Exception as exc:
+            self._show_error(exc)
+
+    def add_scenario_adjustment(self):
+        scenario_id = self._selected_id(self.scenarios_table)
+        if not scenario_id:
+            QMessageBox.information(self, "Select a scenario", "Choose a scenario first.")
+            return
+        scenario = self.scenario_service.get(int(scenario_id))
+        dialog = ScenarioAdjustmentDialog(self, int(scenario["horizon_months"]))
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                self.scenario_service.add_adjustment(
+                    int(scenario_id), **dialog.values()
+                )
+                self.refresh_scenario_details()
+            except Exception as exc:
+                self._show_error(exc)
+
+    def edit_scenario_adjustment(self):
+        scenario_id = self._selected_id(self.scenarios_table)
+        adjustment_id = self._selected_id(self.scenario_adjustments_table)
+        if not scenario_id or not adjustment_id:
+            QMessageBox.information(
+                self, "Select an assumption", "Choose a scenario and an assumption to edit."
+            )
+            return
+        scenario = self.scenario_service.get(int(scenario_id))
+        adjustment = self.db_row_scenario_adjustment(int(adjustment_id))
+        if not adjustment:
+            self.refresh_scenario_details()
+            return
+        dialog = ScenarioAdjustmentDialog(
+            self, int(scenario["horizon_months"]), adjustment
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            try:
+                self.scenario_service.update_adjustment(
+                    int(adjustment_id), **dialog.values()
+                )
+                self.refresh_scenario_details()
+            except Exception as exc:
+                self._show_error(exc)
+
+    def db_row_scenario_adjustment(self, adjustment_id: int):
+        return self.finance.db.fetch_one(
+            "SELECT * FROM scenario_adjustments WHERE id = ?", (int(adjustment_id),)
+        )
+
+    def delete_scenario_adjustment(self):
+        adjustment_id = self._selected_id(self.scenario_adjustments_table)
+        if not adjustment_id:
+            QMessageBox.information(
+                self, "Select an assumption", "Choose an assumption to remove."
+            )
+            return
+        try:
+            self.scenario_service.delete_adjustment(int(adjustment_id))
+            self.refresh_scenario_details()
+        except Exception as exc:
+            self._show_error(exc)
+
+    def compare_financial_scenarios(self):
+        scenario_ids = []
+        for model_index in self.scenarios_table.selectionModel().selectedRows():
+            item = self.scenarios_table.item(model_index.row(), 0)
+            if item:
+                scenario_ids.append(int(item.data(Qt.ItemDataRole.UserRole)))
+        try:
+            comparison = self.scenario_service.compare(scenario_ids)
+            self.scenario_comparison_table.setRowCount(0)
+            for item in comparison["ending_balances"]:
+                index = self.scenario_comparison_table.rowCount()
+                self.scenario_comparison_table.insertRow(index)
+                values = [
+                    item["name"],
+                    money(item["ending_balance_minor"], comparison["currency"]),
+                    money(item["difference_minor"], comparison["currency"]),
+                    item["first_negative_month"] or "None",
+                ]
+                for column, value in enumerate(values):
+                    self.scenario_comparison_table.setItem(
+                        index, column, QTableWidgetItem(str(value))
+                    )
+        except Exception as exc:
+            self._show_error(exc)
 
     def refresh_reconciliation(self):
         if not hasattr(self, "reconciliation_account"):

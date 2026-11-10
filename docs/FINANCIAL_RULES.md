@@ -45,6 +45,14 @@ Recurring schedules preserve a monthly anchor day to avoid date drift. If the se
 
 Forecasts include only active schedules and bills. A forecast event is an estimate, not a transaction. Forecasting never writes to the ledger.
 
+## Financial scenarios
+
+A scenario projects one selected account at a time for 1 to 60 calendar months. Its baseline includes the account's current balance on the start date and only active recurring schedules and bills assigned to that account. The baseline uses the same recurrence advancement and overdue handling as the cash-flow forecast.
+
+Scenario assumptions are positive amounts in the account's currency. Income increases the projected balance; expenses decrease it. One-time assumptions affect only their selected month. Monthly assumptions repeat from their start month through the optional end month or the projection horizon. Scenario assumptions are not transactions, are excluded from actual budgets and reports, and are never posted to the ledger.
+
+Scenario comparisons require the same account, start date, and horizon. They compare hypothetical ending balances to each scenario's baseline. The monthly closing balance is flagged when below zero; this is a planning warning, not a prediction or overdraft action.
+
 ## Reconciliation
 
 A reconciliation starts from the account opening balance or the previous closed statement balance. The user selects transactions that appear on the statement. The calculated balance is the opening balance plus the signed effect of selected items.

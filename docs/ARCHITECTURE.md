@@ -20,6 +20,7 @@ PersonalBank is a desktop application with a local SQLite persistence layer. It 
 │ FinanceService · DebtService · InvestmentService       │
 │ RecurringTransactionService · ForecastService          │
 │ ReconciliationService · NetWorthService · Currency      │
+│ FinancialScenarioService                                │
 └──────────────────────────┬────────────────────────────┘
                            │ SQL / repository calls
 ┌──────────────────────────▼────────────────────────────┐
@@ -65,6 +66,7 @@ The database enables foreign-key enforcement and WAL journaling. `SCHEMA_VERSION
 - Foreign keys link accounts, categories, trades, payments, reconciliation items, and transaction attachments.
 - Transaction attachment content is stored as a size-limited SQLite BLOB, so ordinary database backups include it.
 - Manual exchange rates are stored as decimal text and used only by the current currency valuation report.
+- Saved financial scenarios and their assumptions are separate from ledger transactions; previews layer assumptions over the existing cash-flow forecast.
 - `CHECK` constraints enforce positive transaction amounts and valid status values.
 - Unique constraints prevent duplicate category names within a category type, duplicate monthly budgets for a category, duplicate security symbols, and duplicate net-worth snapshots for a date.
 - Reconciled transactions and investment/debt-linked transactions are protected from ordinary edit/delete operations.

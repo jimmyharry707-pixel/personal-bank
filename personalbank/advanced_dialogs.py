@@ -67,6 +67,93 @@ class RecurringDialog(BaseDialog):
         }
 
 
+class FinancialScenarioDialog(BaseDialog):
+    def __init__(self, parent, accounts, scenario=None):
+        super().__init__("Financial planning scenario", parent)
+        self.name = self.add_text("Scenario name", scenario["name"] if scenario else "")
+        account_options = [(a["name"], int(a["id"])) for a in accounts if a["is_active"]]
+        self.account = self.add_combo("Forecast account", account_options)
+        if scenario:
+            self.account.setCurrentIndex(
+                max(0, self.account.findData(int(scenario["account_id"])))
+            )
+        self.start_date = self.add_date(
+            "Projection start date", scenario["start_date"] if scenario else None
+        )
+        self.horizon = QSpinBox()
+        self.horizon.setRange(1, 60)
+        self.horizon.setSuffix(" months")
+        self.horizon.setValue(int(scenario["horizon_months"]) if scenario else 12)
+        self.form.addRow("Projection horizon", self.horizon)
+        self.notes = self.add_notes()
+        if scenario:
+            self.notes.setPlainText(scenario["notes"])
+
+    def values(self):
+        return {
+            "name": self.name.text().strip(),
+            "account_id": int(self.account.currentData()),
+            "start_date": self.start_date.date().toString("yyyy-MM-dd"),
+            "horizon_months": self.horizon.value(),
+            "notes": self.notes.toPlainText().strip(),
+        }
+
+
+class ScenarioAdjustmentDialog(BaseDialog):
+    def __init__(self, parent, horizon_months: int, adjustment=None):
+        super().__init__("Scenario assumption", parent)
+        self.horizon_months = int(horizon_months)
+        self.name = self.add_text("Assumption name", adjustment["name"] if adjustment else "")
+        self.kind = self.add_combo("Type", [
+            ("Expense", "expense"), ("Income", "income"),
+        ])
+        self.cadence = self.add_combo("Schedule", [
+            ("One-time", "one_time"), ("Monthly", "monthly"),
+        ])
+        self.amount = self.add_amount(
+            "Amount", int(adjustment["amount_minor"]) / 100 if adjustment else 0.0
+        )
+        self.start_month = QSpinBox()
+        self.start_month.setRange(1, self.horizon_months)
+        self.start_month.setPrefix("Month ")
+        self.start_month.setValue(int(adjustment["start_month"]) if adjustment else 1)
+        self.form.addRow("Starts in", self.start_month)
+        self.end_month = QSpinBox()
+        self.end_month.setRange(0, self.horizon_months)
+        self.end_month.setSpecialValueText("Through horizon")
+        self.end_month.setPrefix("Month ")
+        self.end_month.setValue(
+            int(adjustment["end_month"])
+            if adjustment and adjustment["end_month"] is not None else 0
+        )
+        self.form.addRow("Ends in", self.end_month)
+        self.notes = self.add_notes()
+        if adjustment:
+            self.kind.setCurrentIndex(max(0, self.kind.findData(adjustment["kind"])))
+            self.cadence.setCurrentIndex(max(0, self.cadence.findData(adjustment["cadence"])))
+            self.notes.setPlainText(adjustment["notes"])
+        self.cadence.currentIndexChanged.connect(self._sync_end_month)
+        self._sync_end_month()
+
+    def _sync_end_month(self):
+        monthly = self.cadence.currentData() == "monthly"
+        self.end_month.setEnabled(monthly)
+        label = self.form.labelForField(self.end_month)
+        if label:
+            label.setEnabled(monthly)
+
+    def values(self):
+        return {
+            "name": self.name.text().strip(),
+            "kind": self.kind.currentData(),
+            "cadence": self.cadence.currentData(),
+            "amount_minor": to_minor_units(self.amount.value()),
+            "start_month": self.start_month.value(),
+            "end_month": self.end_month.value() or None,
+            "notes": self.notes.toPlainText().strip(),
+        }
+
+
 class DebtPlanDialog(BaseDialog):
     def __init__(self, parent, accounts):
         super().__init__("Add debt plan", parent)

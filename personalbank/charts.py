@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QColor, QPainter, QPen, QBrush, QFont
+from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen, QBrush, QFont
 from PyQt6.QtWidgets import QWidget
 
 
@@ -52,6 +52,87 @@ class BarChart(QWidget):
         painter.drawText(42, 13, "Income")
         painter.setPen(QColor("#ef4444"))
         painter.drawText(100, 13, "Expenses")
+        painter.end()
+
+
+class ScenarioBalanceChart(QWidget):
+    """Compare baseline and scenario account balances across projected months."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.values: list[tuple[str, int, int]] = []
+        self.setMinimumHeight(190)
+
+    def set_values(self, values: list[tuple[str, int, int]]) -> None:
+        self.values = list(values)
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.fillRect(self.rect(), QColor("#ffffff"))
+        plot = self.rect().adjusted(52, 28, -18, -38)
+        if not self.values:
+            painter.setPen(QColor("#64748b"))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No scenario selected")
+            painter.end()
+            return
+
+        numbers = [value for _, baseline, scenario in self.values for value in (baseline, scenario)]
+        minimum, maximum = min(numbers), max(numbers)
+        if minimum == maximum:
+            padding = max(abs(maximum) // 10, 100)
+        else:
+            padding = max((maximum - minimum) // 10, 1)
+        minimum -= padding
+        maximum += padding
+        span = maximum - minimum
+
+        def point(index: int, value: int):
+            x = plot.left() + plot.width() * (
+                0.5 if len(self.values) == 1 else index / (len(self.values) - 1)
+            )
+            y = plot.bottom() - plot.height() * (value - minimum) / span
+            return x, y
+
+        painter.setPen(QPen(QColor("#e2e8f0"), 1))
+        for step in range(5):
+            y = plot.top() + plot.height() * step / 4
+            painter.drawLine(int(plot.left()), int(y), int(plot.right()), int(y))
+        zero_y = plot.bottom() - plot.height() * (0 - minimum) / span
+        if plot.top() <= zero_y <= plot.bottom():
+            painter.setPen(QPen(QColor("#94a3b8"), 1, Qt.PenStyle.DashLine))
+            painter.drawLine(int(plot.left()), int(zero_y), int(plot.right()), int(zero_y))
+
+        series = [
+            (1, QColor("#2563eb")),
+            (2, QColor("#d97706")),
+        ]
+        for value_index, color in series:
+            path = QPainterPath()
+            points = [point(index, values[value_index]) for index, values in enumerate(self.values)]
+            path.moveTo(*points[0])
+            for x, y in points[1:]:
+                path.lineTo(x, y)
+            painter.setPen(QPen(color, 2))
+            painter.drawPath(path)
+            painter.setBrush(QBrush(color))
+            for x, y in points:
+                painter.drawEllipse(int(x - 3), int(y - 3), 6, 6)
+
+        painter.setPen(QColor("#2563eb"))
+        painter.drawText(54, 17, "Baseline")
+        painter.setPen(QColor("#d97706"))
+        painter.drawText(128, 17, "Scenario")
+        painter.setPen(QColor("#64748b"))
+        label_step = max(1, (len(self.values) + 7) // 8)
+        for index, (label, _, _) in enumerate(self.values):
+            if index % label_step == 0 or index == len(self.values) - 1:
+                x, _ = point(index, minimum)
+                painter.drawText(
+                    int(x - 35), int(plot.bottom() + 8), 70, 18,
+                    Qt.AlignmentFlag.AlignHCenter, label,
+                )
         painter.end()
 
 

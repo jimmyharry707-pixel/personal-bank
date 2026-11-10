@@ -1,5 +1,9 @@
 # Upgrade Notes
 
+## Schema version 6 - Financial planning scenarios
+
+The schema version is now 6. Initialization additively creates `financial_scenarios` and `scenario_adjustments`. Existing ledger records and prior forecasts are unchanged. Scenario assumptions are isolated planning data and do not post transactions.
+
 ## Schema version 5 - Manual currency valuation
 
 The schema version is now 5. Initialization additively creates `exchange_rates` for manually maintained currency pairs. Existing transaction amounts and prior net-worth snapshots are not rewritten. If no direct or inverse rate is available, the Currency Valuation page marks that currency as missing and excludes it from converted totals.

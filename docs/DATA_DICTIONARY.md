@@ -183,6 +183,35 @@ Stores one point-in-time snapshot per date, including assets, liabilities, net w
 | rate          | Decimal units of target currency per source unit |
 | updated_at    | Last manual rate update timestamp                |
 
+### financial_scenarios
+
+| Column         | Meaning                                    |
+| -------------- | ------------------------------------------ |
+| id             | Scenario identifier                        |
+| name           | Unique user-facing scenario name           |
+| account_id     | Account whose opening balance is projected |
+| start_date     | First day used for the projection baseline |
+| horizon_months | Projection length, from 1 to 60 months     |
+| notes          | Scenario notes                             |
+| created_at     | Creation timestamp                         |
+| updated_at     | Last scenario update timestamp             |
+
+### scenario_adjustments
+
+| Column       | Meaning                                           |
+| ------------ | ------------------------------------------------- |
+| id           | Assumption identifier                             |
+| scenario_id  | Parent scenario; deletion cascades to assumptions |
+| name         | User-facing assumption name                       |
+| kind         | income or expense                                 |
+| cadence      | one_time or monthly                               |
+| amount_minor | Positive assumption amount in account currency    |
+| start_month  | First projected month affected                    |
+| end_month    | Optional final projected month for monthly items  |
+| notes        | Assumption notes                                  |
+| created_at   | Creation timestamp                                |
+| updated_at   | Last assumption update timestamp                  |
+
 ## Support tables
 
 ### settings
