@@ -51,8 +51,11 @@ from .statement_dialogs import StatementReviewDialog
 STYLE = """
 QMainWindow, QWidget { background: #f8fafc; color: #0f172a; font-family: "Segoe UI", Arial; }
 QLabel#pageTitle { font-size: 23px; font-weight: 700; color: #0f172a; }
+QLabel { background: transparent; }
 QLabel#muted { color: #64748b; }
 QFrame#sidebar { background: #111827; border: none; }
+QLabel#brand { color: #f8fafc; background: transparent; font-size: 15px; font-weight: 800; padding: 8px 10px 18px; }
+QLabel#sidebarFooter { color: #94a3b8; background: transparent; font-size: 10px; padding: 8px; }
 QPushButton#navButton {
     color: #cbd5e1; background: transparent; border: none; text-align: left;
     padding: 12px 15px; border-radius: 8px; font-size: 14px;
@@ -81,8 +84,15 @@ QHeaderView::section {
     border-bottom: 1px solid #e2e8f0; font-weight: 600;
 }
 QFrame#card { background: white; border: 1px solid #e2e8f0; border-radius: 10px; }
-QLabel#cardLabel { color: #64748b; font-size: 12px; }
-QLabel#cardValue { color: #0f172a; font-size: 22px; font-weight: 700; }
+QLabel#cardLabel { color: #64748b; background: transparent; font-size: 11px; font-weight: 600; }
+QLabel#cardValue { color: #0f172a; background: transparent; font-size: 21px; font-weight: 700; }
+QLabel#cardHint { color: #64748b; background: transparent; font-size: 11px; }
+QFrame#emptyState { background: white; border: 1px dashed #cbd5e1; border-radius: 8px; }
+QLabel#emptyTitle { color: #1e293b; background: transparent; font-size: 16px; font-weight: 600; }
+QScrollBar:vertical { background: transparent; width: 8px; margin: 2px; }
+QScrollBar::handle:vertical { background: #475569; min-height: 28px; border-radius: 4px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar:horizontal { height: 0; }
 """
 
 NAV_ITEMS = [
@@ -109,7 +119,7 @@ class MetricCard(QFrame):
         self.value_label = QLabel(value)
         self.value_label.setObjectName("cardValue")
         self.hint_label = QLabel(hint)
-        self.hint_label.setObjectName("muted")
+        self.hint_label.setObjectName("cardHint")
         layout.addWidget(title)
         layout.addWidget(self.value_label)
         layout.addWidget(self.hint_label)
@@ -168,10 +178,12 @@ class MainWindow(QMainWindow):
         side_layout = QVBoxLayout(self.sidebar)
         side_layout.setContentsMargins(14, 20, 14, 16)
         brand = QLabel("PERSONALBANK")
-        brand.setStyleSheet("color: white; font-size: 16px; font-weight: 800; padding: 6px 8px 18px;")
+        brand.setObjectName("brand")
         side_layout.addWidget(brand)
         nav_scroll = QScrollArea()
         nav_scroll.setWidgetResizable(True)
+        nav_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        nav_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         nav_scroll.setFrameShape(QFrame.Shape.NoFrame)
         nav_scroll.setStyleSheet("QScrollArea { background: transparent; }")
         nav_widget = QWidget()
@@ -183,6 +195,10 @@ class MainWindow(QMainWindow):
         for name, symbol in NAV_ITEMS:
             button = QPushButton(f"{symbol}   {name}")
             button.setObjectName("navButton")
+            button.setMinimumWidth(0)
+            button.setMaximumWidth(185)
+            button.setFixedHeight(36)
+            button.setToolTip(name)
             button.setCheckable(True)
             button.clicked.connect(lambda checked=False, page=name: self.navigate(page))
             self.nav_buttons[name] = button
@@ -191,7 +207,7 @@ class MainWindow(QMainWindow):
         nav_scroll.setWidget(nav_widget)
         side_layout.addWidget(nav_scroll, 1)
         footer = QLabel("LOCAL DATABASE\nNo server • No cloud")
-        footer.setStyleSheet("color: #94a3b8; font-size: 10px; padding: 8px;")
+        footer.setObjectName("sidebarFooter")
         side_layout.addWidget(footer)
         root.addWidget(self.sidebar)
 
@@ -594,7 +610,38 @@ class MainWindow(QMainWindow):
             "Projected date", "Original due date", "Source", "Item", "Type", "Account", "Amount", "Projected balance"
         ])
         layout.addWidget(self.forecast_table, 1)
-        layout.addWidget(QLabel("Forecasts are estimates only. Nothing is posted automatically."))
+        self.forecast_empty_state = QFrame()
+        self.forecast_empty_state.setObjectName("emptyState")
+        empty_layout = QVBoxLayout(self.forecast_empty_state)
+        empty_layout.setContentsMargins(28, 24, 28, 24)
+        empty_layout.setSpacing(10)
+        empty_layout.addStretch()
+        empty_title = QLabel("Nothing scheduled in this forecast")
+        empty_title.setObjectName("emptyTitle")
+        empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(empty_title)
+        empty_copy = QLabel("Add a bill or recurring schedule to see upcoming cash flow here.")
+        empty_copy.setObjectName("muted")
+        empty_copy.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(empty_copy)
+        empty_actions = QHBoxLayout()
+        empty_actions.addStretch()
+        add_bill = QPushButton("Add bill")
+        add_bill.setObjectName("secondary")
+        add_bill.clicked.connect(self.add_bill)
+        add_schedule = QPushButton("Add recurring schedule")
+        add_schedule.setObjectName("primary")
+        add_schedule.clicked.connect(self.add_recurring)
+        empty_actions.addWidget(add_bill)
+        empty_actions.addWidget(add_schedule)
+        empty_actions.addStretch()
+        empty_layout.addLayout(empty_actions)
+        empty_layout.addStretch()
+        layout.addWidget(self.forecast_empty_state, 1)
+        note = QLabel("Forecasts are estimates only. Nothing is posted automatically.")
+        note.setObjectName("muted")
+        layout.addWidget(note)
+        self.forecast_table.hide()
 
     def _build_scenario_planner(self):
         page, page_layout = self.pages["Scenario planner"]
@@ -1677,6 +1724,9 @@ class MainWindow(QMainWindow):
                 ]
                 for column, value in enumerate(values):
                     self.forecast_table.setItem(index, column, QTableWidgetItem(str(value)))
+            has_events = bool(forecast["events"])
+            self.forecast_table.setVisible(has_events)
+            self.forecast_empty_state.setVisible(not has_events)
         except Exception as exc:
             self.forecast_range_label.setText(f"Forecast unavailable: {exc}")
 
