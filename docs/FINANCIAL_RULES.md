@@ -16,14 +16,14 @@ For a two-decimal currency, 123.45 is stored as 12,345 minor units.
 
 The balance of an account is its opening balance plus the effect of its transactions:
 
-| Transaction | Account effect |
-|---|---:|
-| Income | + amount |
-| Expense | - amount |
-| Transfer out | - amount |
-| Transfer in | + amount |
-| Positive adjustment | + amount |
-| Negative adjustment | - amount |
+| Transaction         | Account effect |
+| ------------------- | -------------: |
+| Income              |       + amount |
+| Expense             |       - amount |
+| Transfer out        |       - amount |
+| Transfer in         |       + amount |
+| Positive adjustment |       + amount |
+| Negative adjustment |       - amount |
 
 The application does not prohibit negative balances. This is useful for recording overdrafts and liabilities, but users must enter the correct opening-balance sign.
 
@@ -85,7 +85,11 @@ The portfolio page does not calculate taxes or choose specific tax lots.
 
 Assets include positive balances from all tracked accounts (including archived accounts) and manually priced investment holdings. Liabilities include negative account balances and all outstanding debt plans, including archived plans. Net worth equals assets minus liabilities.
 
-The application does not convert currencies. A total that includes USD, EUR, or other currencies is not economically meaningful without user-applied conversion. Do not represent the same debt in both a negative liability account and a debt plan.
+The Currency Valuation page converts current account balances, manually priced investments, and outstanding debt plans to the selected base currency using user-entered rates. A rate means one source-currency unit equals the stated number of target-currency units. An inverse rate is used when only the reverse pair is stored; no multi-hop or online rates are inferred. Converted minor units are rounded half up. Missing-rate amounts are shown as missing and excluded from totals.
+
+This report is a current estimate, not historical FX accounting. Transactions, cash-flow reports, budgets, and saved net-worth snapshots stay in their original currencies. Do not represent the same debt in both a negative liability account and a debt plan.
+
+Dashboard cash-flow totals and historical category reports also remain unconverted. If they include more than one currency, interpret them as raw minor-unit totals rather than a meaningful combined amount.
 
 ## Reporting boundaries
 

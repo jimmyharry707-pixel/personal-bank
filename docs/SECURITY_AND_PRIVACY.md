@@ -16,6 +16,7 @@ The SQLite database may contain:
 - Investment symbols, trade quantities, prices, and fees
 - Reconciliation statement balances and cleared-item choices
 - Net-worth snapshots
+- Manually entered currency exchange rates
 - Local activity-log entries
 
 Do not enter online banking passwords, full card numbers, PINs, security answers, or authentication codes. The application does not need these values.

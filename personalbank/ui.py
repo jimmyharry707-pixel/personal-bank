@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import calendar
+import json
 import tempfile
 from datetime import date
 
@@ -39,6 +40,7 @@ from .advanced_dialogs import (
 from .productivity import (
     FinanceCalendarService, SubscriptionService, TaxService, CategorizationRuleService,
 )
+from .currency import CurrencyValuationService
 
 
 STYLE = """
@@ -84,6 +86,7 @@ NAV_ITEMS = [
     ("Cash flow forecast", "⌁"), ("Reconciliation", "≋"), ("Debt planner", "↘"),
     ("Investments", "◈"), ("Savings goals", "◎"),
     ("Net worth", "◇"), ("Categories", "▧"),
+    ("Currency valuation", "¤"),
     ("Subscriptions", "▣"), ("Tax center", "＄"), ("Auto-categorization", "✧"),
     ("Reports", "▥"), ("Activity log", "≡"), ("Settings", "⚙"),
 ]
@@ -127,6 +130,7 @@ class MainWindow(QMainWindow):
         self.debt_service = DebtService(finance)
         self.investment_service = InvestmentService(finance)
         self.net_worth_service = NetWorthService(finance, self.investment_service)
+        self.currency_service = CurrencyValuationService(finance, self.investment_service)
         self.maintenance_service = MaintenanceService(finance.db)
         self.subscription_service = SubscriptionService(finance)
         self.calendar_service = FinanceCalendarService(finance)
@@ -221,6 +225,7 @@ class MainWindow(QMainWindow):
         self._build_investments()
         self._build_net_worth()
         self._build_categories()
+        self._build_currency_valuation()
         self._build_activity_log()
         self._build_subscriptions()
         self._build_tax_center()
@@ -245,6 +250,7 @@ class MainWindow(QMainWindow):
             "Investments": "Track securities, holdings, trades, and manual prices",
             "Savings goals": "Track progress toward your savings targets",
             "Net worth": "Review assets, liabilities, and historical snapshots",
+            "Currency valuation": "Convert current balances using your manually entered exchange rates",
             "Categories": "Organize income and spending categories",
             "Reports": "Understand cash flow and spending patterns",
             "Activity log": "Review local database changes and health",
@@ -253,6 +259,8 @@ class MainWindow(QMainWindow):
         self.header_subtitle.setText(subtitles.get(page_name, ""))
         if page_name == "Calendar":
             self.refresh_finance_calendar()
+        elif page_name == "Settings":
+            self.refresh_setting_currencies()
         for name, button in self.nav_buttons.items():
             button.setChecked(name == page_name)
 
@@ -471,12 +479,14 @@ class MainWindow(QMainWindow):
     def _build_settings(self):
         page, layout = self.pages["Settings"]
         self.settings_currency = QComboBox()
-        self.settings_currency.addItems(["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "INR"])
+        currencies = {"USD", "EUR", "GBP", "CAD", "AUD", "JPY", "INR"}
+        currencies.update(self.currency_service.available_currencies())
+        self.settings_currency.addItems(sorted(currencies))
         self.settings_currency.setCurrentText(self.config.currency)
         self.settings_theme = QComboBox()
         self.settings_theme.addItems(["light"])
         form = QFormLayout()
-        form.addRow("Display currency", self.settings_currency)
+        form.addRow("Display / valuation base currency", self.settings_currency)
         form.addRow("Theme", self.settings_theme)
         self.settings_budget_warning = QSpinBox()
         self.settings_budget_warning.setRange(1, 99)
@@ -687,6 +697,67 @@ class MainWindow(QMainWindow):
         ])
         layout.addWidget(self.net_worth_table, 1)
 
+    def _build_currency_valuation(self):
+        page, layout = self.pages["Currency valuation"]
+        note = QLabel(
+            "Rates are entered manually. Each rate means one source-currency unit "
+            "equals the stated number of base-currency units. No live market rates are used."
+        )
+        note.setWordWrap(True)
+        note.setObjectName("muted")
+        layout.addWidget(note)
+
+        cards = QGridLayout()
+        self.currency_assets_card = MetricCard("VALUED ASSETS", "—")
+        self.currency_liabilities_card = MetricCard("VALUED LIABILITIES", "—")
+        self.currency_net_worth_card = MetricCard("VALUED NET WORTH", "—")
+        cards.addWidget(self.currency_assets_card, 0, 0)
+        cards.addWidget(self.currency_liabilities_card, 0, 1)
+        cards.addWidget(self.currency_net_worth_card, 0, 2)
+        layout.addLayout(cards)
+
+        self.currency_valuation_status = QLabel()
+        self.currency_valuation_status.setWordWrap(True)
+        layout.addWidget(self.currency_valuation_status)
+        self.currency_valuation_table = self._table([
+            "Source", "Item", "Currency", "Original value", "Base value", "Rate",
+        ])
+        layout.addWidget(self.currency_valuation_table, 1)
+
+        layout.addWidget(QLabel("Manual exchange rates"))
+        rate_controls = QHBoxLayout()
+        self.exchange_source_currency = QComboBox()
+        self.exchange_rate = QDoubleSpinBox()
+        self.exchange_rate.setDecimals(8)
+        self.exchange_rate.setRange(0.00000001, 1_000_000_000)
+        self.exchange_rate.setValue(1.0)
+        self.exchange_rate.setMinimumWidth(170)
+        self.exchange_base_label = QLabel()
+        self.exchange_source_currency.currentTextChanged.connect(
+            self._update_exchange_rate_input
+        )
+        save_rate = QPushButton("Save rate")
+        save_rate.setObjectName("primary")
+        save_rate.clicked.connect(self.save_exchange_rate)
+        rate_controls.addWidget(QLabel("1"))
+        rate_controls.addWidget(self.exchange_source_currency)
+        rate_controls.addWidget(QLabel("="))
+        rate_controls.addWidget(self.exchange_rate)
+        rate_controls.addWidget(self.exchange_base_label)
+        rate_controls.addWidget(save_rate)
+        rate_controls.addStretch()
+        layout.addLayout(rate_controls)
+
+        self.exchange_rates_table = self._table(["Currency pair", "Rate", "Updated"])
+        layout.addWidget(self.exchange_rates_table, 1)
+        rate_actions = QHBoxLayout()
+        remove_rate = QPushButton("Remove selected rate")
+        remove_rate.setObjectName("secondary")
+        remove_rate.clicked.connect(self.remove_exchange_rate)
+        rate_actions.addWidget(remove_rate)
+        rate_actions.addStretch()
+        layout.addLayout(rate_actions)
+
     def _build_categories(self):
         page, layout = self.pages["Categories"]
         self._title_row(layout, "Maintain the labels used by transactions and budgets", "＋ Add category", self.add_category)
@@ -853,6 +924,7 @@ class MainWindow(QMainWindow):
         self.refresh_debts()
         self.refresh_investments()
         self.refresh_net_worth()
+        self.refresh_currency_valuation()
         self.refresh_categories()
         self.refresh_activity_log()
         self.refresh_subscriptions()
@@ -1805,17 +1877,45 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "net_worth_table"):
             return
         position = self.net_worth_service.current_position()
-        self.net_worth_assets_card.set_value(money(position["assets_minor"], self.currency))
-        self.net_worth_liabilities_card.set_value(money(position["liabilities_minor"], self.currency))
-        self.net_worth_total_card.set_value(money(position["net_worth_minor"], self.currency))
+        currencies = {row["currency"] for row in position["accounts"]}
+        mixed = len(currencies) > 1
+        display_currency = next(iter(currencies), self.currency) if not mixed else self.currency
+        hint = "Unconverted; see Currency Valuation" if mixed else f"Current value in {display_currency}"
+        assets_value = "Multiple currencies" if mixed else money(position["assets_minor"], display_currency)
+        liabilities_value = "Multiple currencies" if mixed else money(position["liabilities_minor"], display_currency)
+        net_worth_value = "Multiple currencies" if mixed else money(position["net_worth_minor"], display_currency)
+        self.net_worth_assets_card.set_value(
+            assets_value, hint
+        )
+        self.net_worth_liabilities_card.set_value(
+            liabilities_value, hint
+        )
+        self.net_worth_total_card.set_value(
+            net_worth_value, hint
+        )
         self.net_worth_table.setRowCount(0)
         for row in self.net_worth_service.snapshots():
             index = self.net_worth_table.rowCount()
             self.net_worth_table.insertRow(index)
+            try:
+                snapshot_accounts = json.loads(row["details_json"]).get("accounts", [])
+                snapshot_currencies = {account["currency"] for account in snapshot_accounts}
+            except (TypeError, ValueError, KeyError):
+                snapshot_currencies = set()
+            snapshot_mixed = len(snapshot_currencies) > 1
+            snapshot_currency = (
+                next(iter(snapshot_currencies), self.currency)
+                if not snapshot_mixed else None
+            )
+            snapshot_values = (
+                ["Multiple currencies"] * 3 if snapshot_mixed else [
+                    money(int(row["assets_minor"]), snapshot_currency),
+                    money(int(row["liabilities_minor"]), snapshot_currency),
+                    money(int(row["net_worth_minor"]), snapshot_currency),
+                ]
+            )
             values = [
-                row["snapshot_date"], money(int(row["assets_minor"]), self.currency),
-                money(int(row["liabilities_minor"]), self.currency),
-                money(int(row["net_worth_minor"]), self.currency), row["notes"],
+                row["snapshot_date"], *snapshot_values, row["notes"],
             ]
             for column, value in enumerate(values):
                 cell = QTableWidgetItem(str(value))
@@ -1832,6 +1932,138 @@ class MainWindow(QMainWindow):
                 self.refresh_net_worth()
             except Exception as exc:
                 self._show_error(exc)
+
+    def refresh_currency_valuation(self):
+        if not hasattr(self, "currency_valuation_table"):
+            return
+        base_currency = self.config.currency.upper()
+        self.exchange_base_label.setText(base_currency)
+
+        selected_currency = self.exchange_source_currency.currentText()
+        self.exchange_source_currency.blockSignals(True)
+        self.exchange_source_currency.clear()
+        for currency in self.currency_service.available_currencies():
+            if currency != base_currency:
+                self.exchange_source_currency.addItem(currency)
+        selected_index = self.exchange_source_currency.findText(selected_currency)
+        if selected_index >= 0:
+            self.exchange_source_currency.setCurrentIndex(selected_index)
+        self.exchange_source_currency.blockSignals(False)
+        self._update_exchange_rate_input()
+
+        rates = self.currency_service.rates()
+        self.exchange_rates_table.setRowCount(0)
+        for rate in rates:
+            index = self.exchange_rates_table.rowCount()
+            self.exchange_rates_table.insertRow(index)
+            pair = f"{rate['from_currency']} -> {rate['to_currency']}"
+            values = [pair, str(rate["rate"]), str(rate["updated_at"]).replace("T", " ")[:19]]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column == 0:
+                    item.setData(
+                        Qt.ItemDataRole.UserRole,
+                        (rate["from_currency"], rate["to_currency"]),
+                    )
+                self.exchange_rates_table.setItem(index, column, item)
+
+        report = self.currency_service.valuation(base_currency)
+        complete = report["complete"]
+        hint = (
+            "Complete valuation" if complete else
+            f"Missing exchange rates: {', '.join(report['missing_currencies'])}"
+        )
+        self.currency_assets_card.set_value(money(report["assets_minor"], base_currency), hint)
+        self.currency_liabilities_card.set_value(
+            money(report["liabilities_minor"], base_currency), hint
+        )
+        self.currency_net_worth_card.set_value(
+            money(report["net_worth_minor"], base_currency), hint
+        )
+        self.currency_valuation_status.setText(
+            f"{hint}. Missing-rate amounts are excluded from totals. Debt amounts may be counted "
+            "again if also entered as negative account balances."
+        )
+
+        self.currency_valuation_table.setRowCount(0)
+        for row in report["rows"]:
+            index = self.currency_valuation_table.rowCount()
+            self.currency_valuation_table.insertRow(index)
+            rate = self.currency_service.rate(row["currency"], base_currency)
+            rate_text = (
+                f"1 {row['currency']} = {rate:f} {base_currency}"
+                if rate is not None else "Rate missing"
+            )
+            values = [
+                humanize(row["source_type"]),
+                row["name"],
+                row["currency"],
+                money(row["amount_minor"], row["currency"]),
+                money(row["base_minor"], base_currency)
+                if row["base_minor"] is not None else "Rate missing",
+                rate_text,
+            ]
+            for column, value in enumerate(values):
+                self.currency_valuation_table.setItem(
+                    index, column, QTableWidgetItem(str(value))
+                )
+
+    def refresh_setting_currencies(self):
+        if not hasattr(self, "settings_currency"):
+            return
+        current = self.settings_currency.currentText() or self.config.currency
+        currencies = {"USD", "EUR", "GBP", "CAD", "AUD", "JPY", "INR"}
+        currencies.update(self.currency_service.available_currencies())
+        self.settings_currency.blockSignals(True)
+        self.settings_currency.clear()
+        self.settings_currency.addItems(sorted(currencies))
+        self.settings_currency.setCurrentText(current)
+        self.settings_currency.blockSignals(False)
+
+    def _update_exchange_rate_input(self):
+        if not hasattr(self, "exchange_rate"):
+            return
+        source = self.exchange_source_currency.currentText()
+        if not source:
+            self.exchange_rate.setValue(1.0)
+            return
+        rate = self.currency_service.rate(source, self.config.currency)
+        if rate is not None:
+            self.exchange_rate.setValue(float(rate))
+
+    def save_exchange_rate(self):
+        source = self.exchange_source_currency.currentText()
+        if not source:
+            QMessageBox.information(
+                self, "No foreign currencies", "Create an account in another currency first."
+            )
+            return
+        try:
+            self.currency_service.set_rate(
+                source, self.config.currency, self.exchange_rate.value()
+            )
+            self.refresh_currency_valuation()
+        except Exception as exc:
+            self._show_error(exc)
+
+    def remove_exchange_rate(self):
+        row = self.exchange_rates_table.currentRow()
+        item = self.exchange_rates_table.item(row, 0) if row >= 0 else None
+        pair = item.data(Qt.ItemDataRole.UserRole) if item else None
+        if not pair:
+            QMessageBox.information(
+                self, "Select an exchange rate", "Choose a saved rate first."
+            )
+            return
+        if QMessageBox.question(
+            self, "Remove exchange rate", f"Remove {pair[0]} to {pair[1]} rate?"
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.currency_service.delete_rate(*pair)
+            self.refresh_currency_valuation()
+        except Exception as exc:
+            self._show_error(exc)
 
     def refresh_categories(self):
         if not hasattr(self, "categories_table"):

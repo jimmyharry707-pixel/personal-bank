@@ -7,7 +7,7 @@ PersonalBank is a desktop application with a local SQLite persistence layer. It 
 ```text
 ┌───────────────────────────────────────────────────────┐
 │                    PyQt6 MainWindow                    │
-│ Dashboard · Accounts · Transactions · Budgets · ...    │
+│ Dashboard · Accounts · Transactions · Currency · ...  │
 └──────────────────────────┬────────────────────────────┘
                            │ user actions
 ┌──────────────────────────▼────────────────────────────┐
@@ -19,7 +19,7 @@ PersonalBank is a desktop application with a local SQLite persistence layer. It 
 │                    Service Layer                       │
 │ FinanceService · DebtService · InvestmentService       │
 │ RecurringTransactionService · ForecastService          │
-│ ReconciliationService · NetWorthService                 │
+│ ReconciliationService · NetWorthService · Currency      │
 └──────────────────────────┬────────────────────────────┘
                            │ SQL / repository calls
 ┌──────────────────────────▼────────────────────────────┐
@@ -64,6 +64,7 @@ The database enables foreign-key enforcement and WAL journaling. `SCHEMA_VERSION
 - Monetary values use integer minor units.
 - Foreign keys link accounts, categories, trades, payments, reconciliation items, and transaction attachments.
 - Transaction attachment content is stored as a size-limited SQLite BLOB, so ordinary database backups include it.
+- Manual exchange rates are stored as decimal text and used only by the current currency valuation report.
 - `CHECK` constraints enforce positive transaction amounts and valid status values.
 - Unique constraints prevent duplicate category names within a category type, duplicate monthly budgets for a category, duplicate security symbols, and duplicate net-worth snapshots for a date.
 - Reconciled transactions and investment/debt-linked transactions are protected from ordinary edit/delete operations.

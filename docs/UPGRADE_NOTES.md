@@ -1,5 +1,9 @@
 # Upgrade Notes
 
+## Schema version 5 - Manual currency valuation
+
+The schema version is now 5. Initialization additively creates `exchange_rates` for manually maintained currency pairs. Existing transaction amounts and prior net-worth snapshots are not rewritten. If no direct or inverse rate is available, the Currency Valuation page marks that currency as missing and excludes it from converted totals.
+
 ## Schema version 4 - Transaction receipt attachments
 
 The schema version is now 4. Initialization additively creates `transaction_attachments`, which stores receipt file metadata and content in SQLite. Existing transactions are unchanged, and existing SQLite backups remain restorable. Transaction deletion cascades to its attachments.

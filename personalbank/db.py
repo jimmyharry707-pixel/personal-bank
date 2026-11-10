@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterator, Any
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 SCHEMA = """
@@ -219,6 +219,16 @@ CREATE TABLE IF NOT EXISTS net_worth_snapshots (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS exchange_rates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_currency TEXT NOT NULL CHECK (length(from_currency) = 3),
+    to_currency TEXT NOT NULL CHECK (length(to_currency) = 3),
+    rate TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK (from_currency <> to_currency),
+    UNIQUE(from_currency, to_currency)
+);
+
 
 -- Subscription contracts are reminders only; renewal posting is user-confirmed.
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -293,6 +303,7 @@ CREATE INDEX IF NOT EXISTS idx_debt_active ON debt_plans(active, name);
 CREATE INDEX IF NOT EXISTS idx_investment_trade_security ON investment_trades(security_id, trade_date, id);
 CREATE INDEX IF NOT EXISTS idx_investment_trade_account ON investment_trades(investment_account_id, trade_date);
 CREATE INDEX IF NOT EXISTS idx_net_worth_date ON net_worth_snapshots(snapshot_date);
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_pair ON exchange_rates(from_currency, to_currency);
 """
 
 

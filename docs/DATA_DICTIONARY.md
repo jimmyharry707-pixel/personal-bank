@@ -173,6 +173,16 @@ Stores the investment account, security, buy/sell side, quantity in millionths o
 
 Stores one point-in-time snapshot per date, including assets, liabilities, net worth, serialized detail, notes, and creation timestamp.
 
+### exchange_rates
+
+| Column        | Meaning                                          |
+| ------------- | ------------------------------------------------ |
+| id            | Exchange-rate identifier                         |
+| from_currency | Three-letter source currency code                |
+| to_currency   | Three-letter target currency code                |
+| rate          | Decimal units of target currency per source unit |
+| updated_at    | Last manual rate update timestamp                |
+
 ## Support tables
 
 ### settings

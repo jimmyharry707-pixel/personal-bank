@@ -27,6 +27,7 @@ It is a personal recordkeeping tool, not a bank, payment processor, brokerage, l
 - **Debt planner:** track principal, creditor, APR, minimum payment, payment history, and estimated amortization schedules. Recording a payment creates a corresponding local expense transaction.
 - **Investment portfolio:** define securities, record buy/sell trades, enter market prices manually, and calculate holdings, weighted-average cost basis, realized gains, and unrealized gains/losses.
 - **Net worth:** estimate assets and liabilities and preserve dated snapshots.
+- **Currency valuation:** convert current account balances, investment holdings, and debt plans into a selected base currency using manually entered exchange rates. Missing rates are shown and excluded rather than assumed.
 - **Activity log:** browse application audit events and run SQLite integrity and foreign-key checks.
 
 ### Personal finance productivity
@@ -41,7 +42,7 @@ It is a personal recordkeeping tool, not a bank, payment processor, brokerage, l
 - Receipt attachments are stored in the database and included in database backups. PDF and common image files up to 25 MB are supported.
 - Monetary amounts stored as integer minor units rather than binary floating-point values.
 - Database backup and restore.
-- Currency display preference.
+- Currency display and valuation base-currency preference.
 - No server, cloud account, API key, or internet connection is required to use the app.
 
 ## Requirements
@@ -137,7 +138,8 @@ PersonalBank/
 - Investment prices are entered by the user. There is no live quote feed.
 - Debt payoff schedules are estimates using a fixed APR and monthly compounding. They do not replace a lender's official payoff quote.
 - The database is not encrypted by the application. Use operating-system account protection and full-disk encryption. Backups are also ordinary SQLite files.
-- Combined totals assume one currency. The app does not perform foreign-exchange conversion. Avoid combining multiple currencies in a single net-worth total unless you convert them yourself before entering values.
+- The Currency Valuation page converts current balances, investment holdings, and debt plans using manually maintained rates. Existing ledger transactions, historical cash-flow reports, budgets, and saved net-worth snapshots remain in their original currencies and are not converted.
+- Dashboard and historical report totals are not comparable when they combine multiple currencies; use Currency Valuation for a manual-rate current estimate.
 - Net-worth calculations include all tracked account balances (including archived accounts), investment market value, and outstanding debt plans (including archived plans). Do not also enter the same debt as a negative liability account, or it will be counted twice.
 - Credit-card and loan account balances use a negative-balance convention for amounts owed. See `docs/FINANCIAL_RULES.md`.
 - Tax labels are personal annotations only. The tax center does not determine eligibility, calculate tax owed, prepare returns, or replace advice from a qualified tax professional.\n- This software is intended for personal tracking and planning, not official accounting, tax filing, investment advice, or regulatory reporting.
