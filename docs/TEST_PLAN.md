@@ -26,6 +26,7 @@ The tests create temporary database files and clean them up after each test clas
 - Missing required CSV columns
 - SQLite backup integrity
 - Restore into a new database
+- Receipt attachment validation, transaction-delete cascade, additive schema upgrade, and backup/restore
 
 ## Advanced finance tests
 
@@ -52,14 +53,15 @@ Because the automated test suite does not launch a graphical Qt session, perform
 1. Start the app with `python -m personalbank`.
 2. Create checking, savings, and investment accounts.
 3. Add income, expense, and transfer transactions.
-4. Create a monthly budget and recurring schedule.
-5. Generate a cash-flow forecast and verify it does not add ledger transactions.
-6. Start a reconciliation, check the relevant items, and close it when the difference reaches zero.
-7. Create a debt plan, view its schedule, and record a payment.
-8. Add a security, record a buy, update the manual price, and record a partial sale.
-9. Save a net-worth snapshot.
-10. Export transactions, create a backup, and run the database health check.
-11. Close and reopen the app to confirm persistence.
+4. Attach an image or PDF receipt to a transaction, open it, then remove it.
+5. Create a monthly budget and recurring schedule.
+6. Generate a cash-flow forecast and verify it does not add ledger transactions.
+7. Start a reconciliation, check the relevant items, and close it when the difference reaches zero.
+8. Create a debt plan, view its schedule, and record a payment.
+9. Add a security, record a buy, update the manual price, and record a partial sale.
+10. Save a net-worth snapshot.
+11. Export transactions, create a backup, and run the database health check.
+12. Close and reopen the app to confirm persistence.
 
 ## Expected limitations
 

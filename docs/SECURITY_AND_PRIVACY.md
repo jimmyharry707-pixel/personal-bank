@@ -9,6 +9,7 @@ The SQLite database may contain:
 - Account names and account types
 - Opening balances and current ledger activity
 - Payees, descriptions, references, and notes
+- Receipt attachments stored inside the database
 - Budget limits and recurring bill details
 - Savings goals and contributions
 - Debt balances, APRs, and payment records
@@ -22,6 +23,8 @@ Do not enter online banking passwords, full card numbers, PINs, security answers
 ## Local storage
 
 The database is stored under the current user's home directory by default. It is an ordinary SQLite file and is not encrypted by this application. Anyone with access to the file can potentially read its contents.
+
+Receipt attachments are stored as database BLOBs, so they are included in database backups and have the same lack of application-level encryption. Opening a receipt creates a temporary local copy for the operating system's default viewer; it is removed when the application exits normally.
 
 Recommended precautions:
 

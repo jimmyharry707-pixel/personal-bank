@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterator, Any
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 SCHEMA = """
@@ -49,6 +49,16 @@ CREATE TABLE IF NOT EXISTS transactions (
     notes TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS transaction_attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    filename TEXT NOT NULL,
+    media_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL CHECK (size_bytes BETWEEN 1 AND 26214400),
+    content BLOB NOT NULL CHECK (length(content) = size_bytes),
+    created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS budgets (
@@ -274,6 +284,7 @@ CREATE INDEX IF NOT EXISTS idx_categorization_rules_priority ON categorization_r
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(occurred_on);
 CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, occurred_on);
 CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category_id, occurred_on);
+CREATE INDEX IF NOT EXISTS idx_transaction_attachments_transaction ON transaction_attachments(transaction_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_budgets_month ON budgets(month);
 CREATE INDEX IF NOT EXISTS idx_bills_due ON bills(next_due_date, active);
 CREATE INDEX IF NOT EXISTS idx_recurring_due ON recurring_transactions(next_due_date, active);

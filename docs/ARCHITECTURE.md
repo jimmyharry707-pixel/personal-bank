@@ -62,7 +62,8 @@ The database enables foreign-key enforcement and WAL journaling. `SCHEMA_VERSION
 ## Data integrity choices
 
 - Monetary values use integer minor units.
-- Foreign keys link accounts, categories, trades, payments, and reconciliation items.
+- Foreign keys link accounts, categories, trades, payments, reconciliation items, and transaction attachments.
+- Transaction attachment content is stored as a size-limited SQLite BLOB, so ordinary database backups include it.
 - `CHECK` constraints enforce positive transaction amounts and valid status values.
 - Unique constraints prevent duplicate category names within a category type, duplicate monthly budgets for a category, duplicate security symbols, and duplicate net-worth snapshots for a date.
 - Reconciled transactions and investment/debt-linked transactions are protected from ordinary edit/delete operations.

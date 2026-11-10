@@ -1,5 +1,9 @@
 # Upgrade Notes
 
+## Schema version 4 - Transaction receipt attachments
+
+The schema version is now 4. Initialization additively creates `transaction_attachments`, which stores receipt file metadata and content in SQLite. Existing transactions are unchanged, and existing SQLite backups remain restorable. Transaction deletion cascades to its attachments.
+
 ## Version 1.1.0 — Advanced personal finance expansion
 
 The schema version is now 2. The initializer adds the following tables if they do not already exist:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import calendar
+import tempfile
 from datetime import date
 
 from PyQt6.QtCore import QDate, Qt
@@ -14,6 +15,8 @@ from PyQt6.QtWidgets import (
 )
 
 from .backup import BackupService
+from .attachment_dialogs import ReceiptAttachmentDialog
+from .attachments import ReceiptAttachmentService
 from .charts import BarChart, HorizontalBars
 from .csv_tools import CsvService
 from .dialogs import (
@@ -114,6 +117,10 @@ class MainWindow(QMainWindow):
         self.config = config
         self.csv_service = CsvService(finance)
         self.backup_service = BackupService(finance.db)
+        self.attachment_service = ReceiptAttachmentService(finance)
+        self.attachment_open_directory = tempfile.TemporaryDirectory(
+            prefix="personalbank-receipts-"
+        )
         self.recurring_service = RecurringTransactionService(finance)
         self.forecast_service = CashFlowForecastService(finance)
         self.reconciliation_service = ReconciliationService(finance)
@@ -348,6 +355,9 @@ class MainWindow(QMainWindow):
         delete = QPushButton("Delete selected")
         delete.setObjectName("secondary")
         delete.clicked.connect(self.delete_transaction)
+        receipts = QPushButton("Receipts")
+        receipts.setObjectName("secondary")
+        receipts.clicked.connect(self.manage_transaction_attachments)
         export = QPushButton("Export CSV")
         export.setObjectName("secondary")
         export.clicked.connect(self.export_csv)
@@ -356,6 +366,7 @@ class MainWindow(QMainWindow):
         import_button.clicked.connect(self.import_csv)
         row.addWidget(edit)
         row.addWidget(delete)
+        row.addWidget(receipts)
         row.addStretch()
         row.addWidget(import_button)
         row.addWidget(export)
@@ -1088,6 +1099,22 @@ class MainWindow(QMainWindow):
     def _show_error(self, exc):
         QMessageBox.warning(self, "Please check your entry", str(exc))
 
+    def manage_transaction_attachments(self):
+        transaction_id = self._selected_id(self.transactions_table)
+        if not transaction_id:
+            QMessageBox.information(
+                self, "Select a transaction", "Choose a transaction before managing receipts."
+            )
+            return
+        dialog = ReceiptAttachmentDialog(
+            self,
+            self.attachment_service,
+            int(transaction_id),
+            self.attachment_open_directory.name,
+        )
+        dialog.exec()
+        self.refresh_activity_log()
+
     def add_account(self):
         dialog = AccountDialog(self, currency=self.currency)
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -1167,7 +1194,10 @@ class MainWindow(QMainWindow):
         if not transaction_id:
             QMessageBox.information(self, "Select a transaction", "Choose a transaction first.")
             return
-        if QMessageBox.question(self, "Delete transaction", "Delete this transaction?") == QMessageBox.StandardButton.Yes:
+        if QMessageBox.question(
+            self, "Delete transaction",
+            "Delete this transaction and its attached receipt files?",
+        ) == QMessageBox.StandardButton.Yes:
             try:
                 self.finance.delete_transaction(int(transaction_id))
                 self.refresh_all()

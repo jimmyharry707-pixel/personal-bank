@@ -24,6 +24,8 @@ Transfers do not count as income or expenses in the cash-flow report. They only 
 
 Select an existing transaction and choose **Edit selected** to correct a normal income, expense, or transfer. Reconciled transactions and transactions linked to debt or investment records are protected from editing and deletion. Balance adjustments are not editable in the current UI.
 
+Select a transaction and choose **Receipts** to attach PDF, PNG, JPG, WEBP, or GIF files up to 25 MB. Attachments are stored in the local database, included in database backups, and removed when their transaction is deleted. **Open selected** writes a temporary copy and opens it with the operating system's default application.
+
 ## Categories and budgets
 
 Use **Categories** to create income and expense labels. Archived categories remain attached to historical transactions but are not offered for new entries.
