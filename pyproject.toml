@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "personalbank"
+version = "1.2.0"
+description = "A local-only personal finance desktop manager with subscriptions, tax records, and categorization rules."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["PyQt6>=6.6,<7"]
+
+[project.scripts]
+personalbank = "personalbank.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["personalbank*"]
