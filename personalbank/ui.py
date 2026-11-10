@@ -27,11 +27,12 @@ from .dialogs import (
 from .domain import today_iso
 from .formatting import humanize, money
 from .advanced import (
-    CashFlowForecastService, DebtService, InvestmentService, MaintenanceService,
+    CashFlowForecastService, DebtPayoffStrategyService, DebtService, InvestmentService, MaintenanceService,
     NetWorthService, ReconciliationService, RecurringTransactionService,
 )
 from .advanced_dialogs import (
     CategoryDialog, DebtPaymentDialog, DebtPlanDialog, DebtScheduleDialog,
+    DebtStrategyDialog,
     FinancialScenarioDialog, ScenarioAdjustmentDialog,
     NetWorthSnapshotDialog, ReconciliationStartDialog, RecurringDialog,
     SecurityDialog, SecurityPriceDialog, TradeDialog, TransactionEditDialog,
@@ -134,6 +135,7 @@ class MainWindow(QMainWindow):
         self.forecast_service = CashFlowForecastService(finance)
         self.reconciliation_service = ReconciliationService(finance)
         self.debt_service = DebtService(finance)
+        self.debt_strategy_service = DebtPayoffStrategyService(finance)
         self.investment_service = InvestmentService(finance)
         self.net_worth_service = NetWorthService(finance, self.investment_service)
         self.currency_service = CurrencyValuationService(finance, self.investment_service)
@@ -752,11 +754,15 @@ class MainWindow(QMainWindow):
         schedule = QPushButton("View payoff schedule")
         schedule.setObjectName("secondary")
         schedule.clicked.connect(self.view_debt_schedule)
+        strategies = QPushButton("Compare payoff strategies")
+        strategies.setObjectName("secondary")
+        strategies.clicked.connect(self.compare_debt_strategies)
         archive = QPushButton("Archive selected")
         archive.setObjectName("secondary")
         archive.clicked.connect(self.archive_debt_plan)
         actions.addWidget(payment)
         actions.addWidget(schedule)
+        actions.addWidget(strategies)
         actions.addWidget(archive)
         actions.addStretch()
         layout.addLayout(actions)
@@ -2194,6 +2200,10 @@ class MainWindow(QMainWindow):
             dialog.exec()
         except Exception as exc:
             self._show_error(exc)
+
+    def compare_debt_strategies(self):
+        dialog = DebtStrategyDialog(self, self.debt_strategy_service, self.currency)
+        dialog.exec()
 
     def archive_debt_plan(self):
         debt_id = self._selected_id(self.debt_table)

@@ -70,6 +70,8 @@ Create a debt plan with the current principal, APR, minimum payment, due day, an
 
 Use **Record payment** to enter a payment. The application estimates monthly interest, creates an expense transaction in the payment account, and reduces the debt balance by the principal portion. The interest calculation is an estimate; compare it with the lender's statement.
 
+Choose **Compare payoff strategies** to compare minimum payments, snowball (lowest balance first), and avalanche (highest APR first). Enter an optional extra monthly amount to see estimated payoff time, interest, total paid, and month-by-month balances. Snowball and avalanche roll minimum payments freed by paid-off debts into the next target. All debt plans in a comparison must use the same currency. This is a read-only estimate and does not record payments.
+
 ## Investments
 
 Create an account with type **Investment**. Add a security with its ticker, name, asset type, and currency. Record buys and sells manually. The application updates the investment account cash ledger and the share position.

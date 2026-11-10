@@ -652,6 +652,169 @@ class DebtService:
         )
 
 
+class DebtPayoffStrategyService:
+    """Compare minimum-payment, snowball, and avalanche payoff estimates."""
+
+    MAX_MONTHS = 1200
+
+    def __init__(self, finance):
+        self.finance = finance
+        self.db = finance.db
+
+    def compare(self, extra_monthly_minor: int = 0) -> dict[str, Any]:
+        extra = int(extra_monthly_minor)
+        if extra < 0:
+            raise ValueError("Extra monthly payment cannot be negative.")
+        plans = [
+            dict(row) for row in DebtService(self.finance).list_plans()
+            if int(row["principal_minor"]) > 0
+        ]
+        if not plans:
+            raise ValueError("Create an active debt plan before comparing payoff strategies.")
+        currencies = {
+            str(self.finance.accounts.get(int(plan["payment_account_id"]))["currency"]).upper()
+            for plan in plans
+        }
+        if len(currencies) != 1:
+            raise ValueError("Debt payoff strategies require debt plans in the same currency.")
+
+        minimum_budget = sum(int(plan["minimum_payment_minor"]) for plan in plans)
+        monthly_budget = minimum_budget + extra
+        baseline = self._simulate(plans, "minimum", minimum_budget)
+        snowball = self._simulate(plans, "snowball", monthly_budget)
+        avalanche = self._simulate(plans, "avalanche", monthly_budget)
+        baseline_interest = int(baseline["total_interest_minor"])
+        for result in (baseline, snowball, avalanche):
+            result["interest_saved_minor"] = max(
+                0, baseline_interest - int(result["total_interest_minor"])
+            )
+        return {
+            "currency": next(iter(currencies)),
+            "extra_monthly_minor": extra,
+            "monthly_budget_minor": monthly_budget,
+            "strategies": [baseline, snowball, avalanche],
+            "interest_difference_minor": (
+                int(snowball["total_interest_minor"])
+                - int(avalanche["total_interest_minor"])
+            ),
+        }
+
+    def _simulate(
+        self, plans: list[dict[str, Any]], strategy: str, monthly_budget: int,
+    ) -> dict[str, Any]:
+        balances = {int(plan["id"]): int(plan["principal_minor"]) for plan in plans}
+        totals = {int(plan["id"]): 0 for plan in plans}
+        payoff_months: dict[int, int | None] = {int(plan["id"]): None for plan in plans}
+        interest_by_plan = {int(plan["id"]): 0 for plan in plans}
+        total_interest = 0
+        monthly_rows = []
+
+        if strategy == "snowball":
+            priority = sorted(
+                plans,
+                key=lambda plan: (
+                    int(plan["principal_minor"]), int(plan["apr_basis_points"]),
+                    str(plan["name"]).casefold(),
+                ),
+            )
+        elif strategy == "avalanche":
+            priority = sorted(
+                plans,
+                key=lambda plan: (
+                    -int(plan["apr_basis_points"]), int(plan["principal_minor"]),
+                    str(plan["name"]).casefold(),
+                ),
+            )
+        else:
+            priority = []
+
+        for month in range(1, self.MAX_MONTHS + 1):
+            if not any(balances.values()):
+                break
+            month_interest = {}
+            month_paid = {int(plan["id"]): 0 for plan in plans}
+            month_opening = dict(balances)
+            for plan in plans:
+                plan_id = int(plan["id"])
+                balance = balances[plan_id]
+                if balance <= 0:
+                    month_interest[plan_id] = 0
+                    continue
+                interest = DebtService.monthly_interest(
+                    balance, int(plan["apr_basis_points"])
+                )
+                month_interest[plan_id] = interest
+                total_interest += interest
+                interest_by_plan[plan_id] += interest
+                accrued = balance + interest
+                minimum = min(accrued, int(plan["minimum_payment_minor"]))
+                month_paid[plan_id] += minimum
+                balances[plan_id] = accrued - minimum
+
+            if strategy != "minimum":
+                remaining_budget = max(0, monthly_budget - sum(month_paid.values()))
+                for plan in priority:
+                    plan_id = int(plan["id"])
+                    if remaining_budget <= 0:
+                        break
+                    allocation = min(balances[plan_id], remaining_budget)
+                    balances[plan_id] -= allocation
+                    month_paid[plan_id] += allocation
+                    remaining_budget -= allocation
+
+            paid_off = []
+            for plan in plans:
+                plan_id = int(plan["id"])
+                amount_paid = month_paid[plan_id]
+                totals[plan_id] += amount_paid
+                if month_opening[plan_id] > 0 and balances[plan_id] == 0:
+                    payoff_months[plan_id] = month
+                    paid_off.append(str(plan["name"]))
+
+            monthly_rows.append({
+                "month": month,
+                "opening_minor": sum(month_opening.values()),
+                "interest_minor": sum(month_interest.values()),
+                "payment_minor": sum(month_paid.values()),
+                "closing_minor": sum(balances.values()),
+                "paid_off": paid_off,
+            })
+
+        if any(balances.values()):
+            raise ValueError(
+                "At least one debt does not amortize within 1,200 months. "
+                "Review the APR and minimum payment amounts."
+            )
+
+        debt_results = []
+        for plan in plans:
+            plan_id = int(plan["id"])
+            debt_results.append({
+                "debt_id": plan_id,
+                "name": plan["name"],
+                "principal_minor": int(plan["principal_minor"]),
+                "apr_basis_points": int(plan["apr_basis_points"]),
+                "minimum_payment_minor": int(plan["minimum_payment_minor"]),
+                "total_interest_minor": interest_by_plan[plan_id],
+                "total_paid_minor": totals[plan_id],
+                "payoff_month": payoff_months[plan_id],
+            })
+        return {
+            "strategy": strategy,
+            "label": {
+                "minimum": "Minimum payments",
+                "snowball": "Snowball (lowest balance first)",
+                "avalanche": "Avalanche (highest APR first)",
+            }[strategy],
+            "months": len(monthly_rows),
+            "total_interest_minor": total_interest,
+            "total_paid_minor": sum(totals.values()),
+            "ending_balance_minor": sum(balances.values()),
+            "debts": debt_results,
+            "monthly": monthly_rows,
+        }
+
+
 class InvestmentService:
     """Manual holdings and trade ledger using weighted-average cost basis."""
 

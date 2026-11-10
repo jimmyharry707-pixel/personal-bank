@@ -25,7 +25,7 @@ It is a personal recordkeeping tool, not a bank, payment processor, brokerage, l
 - **Cash-flow forecast:** projects active recurring schedules and bills over a selectable horizon. Overdue items are identified. Forecasts never post transactions.
 - **Scenario planner:** save and compare account-level plans with monthly or one-time income and expense assumptions, inspect month-by-month balances and negative-balance warnings, duplicate plans, and export projections. Scenarios never change the ledger.
 - **Bank reconciliation:** compare an account ledger with a statement ending balance, select cleared transactions, and close only when the difference is zero.
-- **Debt planner:** track principal, creditor, APR, minimum payment, payment history, and estimated amortization schedules. Recording a payment creates a corresponding local expense transaction.
+- **Debt planner:** track principal, creditor, APR, minimum payment, payment history, and estimated amortization schedules. Compare minimum-only, snowball, and avalanche payoff plans with optional extra monthly payment. Recording a payment creates a corresponding local expense transaction; comparisons are read-only estimates.
 - **Investment portfolio:** define securities, record buy/sell trades, enter market prices manually, and calculate holdings, weighted-average cost basis, realized gains, and unrealized gains/losses.
 - **Net worth:** estimate assets and liabilities and preserve dated snapshots.
 - **Currency valuation:** convert current account balances, investment holdings, and debt plans into a selected base currency using manually entered exchange rates. Missing rates are shown and excluded rather than assumed.

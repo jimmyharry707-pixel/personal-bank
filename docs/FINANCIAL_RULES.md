@@ -75,6 +75,10 @@ When a payment is recorded, the application estimates interest for each elapsed 
 
 The schedule assumes a constant APR and a fixed monthly payment. It is not a lender payoff quote and may differ from the lender's daily-interest method, compounding conventions, fees, and posting dates.
 
+### Payoff strategy comparisons
+
+The strategy comparison simulates active debt plans with positive principal, using each plan's current principal, APR, and minimum payment. It applies the existing monthly-interest rounding before payments. The minimum-only baseline pays each plan's minimum. Snowball sorts by lowest starting balance; avalanche sorts by highest APR. Both accelerated strategies use the sum of starting minimums plus the optional extra amount as a fixed monthly budget and roll unused amounts from paid-off plans to the next target. Comparisons require one currency and never post transactions or update debt records. Results are estimates, not lender payoff quotes.
+
 ## Investment calculations
 
 - Quantity is stored in millionths of a share.

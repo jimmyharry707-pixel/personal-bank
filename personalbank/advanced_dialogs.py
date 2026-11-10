@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import date
 
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QSpinBox,
+    QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QHBoxLayout, QSpinBox,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QHeaderView, QAbstractItemView,
-    QDialogButtonBox, QLabel,
+    QDialogButtonBox, QLabel, QPushButton,
 )
 
 from .dialogs import BaseDialog
 from .domain import to_minor_units, today_iso
+from .formatting import money
 
 
 class RecurringDialog(BaseDialog):
@@ -332,6 +333,135 @@ class DebtScheduleDialog(QDialog):
         buttons.rejected.connect(self.accept)
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
+
+
+class DebtStrategyDialog(QDialog):
+    def __init__(self, parent, service, currency: str = "USD"):
+        super().__init__(parent)
+        self.service = service
+        self.currency = currency
+        self.setWindowTitle("Compare debt payoff strategies")
+        self.resize(900, 600)
+
+        root = QVBoxLayout(self)
+        note = QLabel(
+            "Estimates use current balances, fixed APRs, and monthly compounding. "
+            "Snowball and avalanche roll freed minimum payments forward; no payments are recorded."
+        )
+        note.setWordWrap(True)
+        root.addWidget(note)
+
+        controls = QHBoxLayout()
+        controls.addWidget(QLabel("Extra monthly amount"))
+        self.extra_amount = QDoubleSpinBox()
+        self.extra_amount.setDecimals(2)
+        self.extra_amount.setRange(0, 999999999.99)
+        controls.addWidget(self.extra_amount)
+        self.compare_button = QPushButton("Compare")
+        self.compare_button.setObjectName("primary")
+        self.compare_button.clicked.connect(self.refresh_comparison)
+        controls.addWidget(self.compare_button)
+        controls.addStretch()
+        root.addLayout(controls)
+
+        self.summary_table = QTableWidget(0, 5)
+        self.summary_table.setHorizontalHeaderLabels([
+            "Strategy", "Payoff time", "Estimated interest", "Total paid", "Interest saved",
+        ])
+        self.summary_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.summary_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        root.addWidget(self.summary_table)
+
+        detail_controls = QHBoxLayout()
+        detail_controls.addWidget(QLabel("Monthly details"))
+        self.strategy_choice = QComboBox()
+        self.strategy_choice.currentIndexChanged.connect(self._show_monthly_details)
+        detail_controls.addWidget(self.strategy_choice)
+        detail_controls.addStretch()
+        root.addLayout(detail_controls)
+
+        self.detail_table = QTableWidget(0, 6)
+        self.detail_table.setHorizontalHeaderLabels([
+            "Month", "Opening balance", "Interest", "Payment", "Closing balance", "Paid off",
+        ])
+        self.detail_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.detail_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        root.addWidget(self.detail_table, 1)
+
+        self.status_label = QLabel()
+        self.status_label.setWordWrap(True)
+        root.addWidget(self.status_label)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(self.accept)
+        buttons.accepted.connect(self.accept)
+        root.addWidget(buttons)
+        self.refresh_comparison()
+
+    def refresh_comparison(self):
+        try:
+            self.result = self.service.compare(to_minor_units(self.extra_amount.value()))
+        except Exception as exc:
+            self.result = None
+            self.summary_table.setRowCount(0)
+            self.detail_table.setRowCount(0)
+            self.strategy_choice.clear()
+            self.status_label.setText(str(exc))
+            return
+
+        self.currency = self.result["currency"]
+        strategies = self.result["strategies"]
+        self.summary_table.setRowCount(0)
+        self.strategy_choice.blockSignals(True)
+        self.strategy_choice.clear()
+        for strategy in strategies:
+            index = self.summary_table.rowCount()
+            self.summary_table.insertRow(index)
+            values = [
+                strategy["label"],
+                f"{strategy['months']} months",
+                money(strategy["total_interest_minor"], self.currency),
+                money(strategy["total_paid_minor"], self.currency),
+                money(strategy["interest_saved_minor"], self.currency),
+            ]
+            for column, value in enumerate(values):
+                self.summary_table.setItem(index, column, QTableWidgetItem(str(value)))
+            self.strategy_choice.addItem(strategy["label"], strategy["strategy"])
+        self.strategy_choice.blockSignals(False)
+
+        difference = int(self.result["interest_difference_minor"])
+        if difference > 0:
+            message = f"Avalanche estimates {money(difference, self.currency)} less interest than snowball."
+        elif difference < 0:
+            message = f"Snowball estimates {money(-difference, self.currency)} less interest than avalanche."
+        else:
+            message = "Snowball and avalanche estimate the same total interest."
+        self.status_label.setText(message)
+        self._show_monthly_details()
+
+    def _show_monthly_details(self, *_args):
+        if not self.result:
+            return
+        selected = self.strategy_choice.currentData()
+        strategy = next(
+            (item for item in self.result["strategies"] if item["strategy"] == selected),
+            None,
+        )
+        if not strategy:
+            return
+        self.detail_table.setRowCount(0)
+        for month in strategy["monthly"]:
+            index = self.detail_table.rowCount()
+            self.detail_table.insertRow(index)
+            values = [
+                str(month["month"]),
+                money(month["opening_minor"], self.currency),
+                money(month["interest_minor"], self.currency),
+                money(month["payment_minor"], self.currency),
+                money(month["closing_minor"], self.currency),
+                ", ".join(month["paid_off"]) or "—",
+            ]
+            for column, value in enumerate(values):
+                self.detail_table.setItem(index, column, QTableWidgetItem(str(value)))
 
 
 class TransactionEditDialog(BaseDialog):

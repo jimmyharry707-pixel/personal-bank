@@ -41,6 +41,7 @@ The tests create temporary database files and clean them up after each test clas
 - Preventing already reconciled transactions from appearing again
 - Debt APR conversion, payment validation, amortization schedule, payment posting, and payoff caps
 - Interest accrual by elapsed calendar months and same-month extra payments
+- Minimum-only, snowball, and avalanche comparison, extra-payment rollover, payoff estimates, currency validation, and no-ledger-mutation
 - Investment buy/sell cash effects and weighted-average cost basis
 - Rejecting sales greater than holdings and mismatched currencies
 - Preventing edits/deletes of linked investment and reconciled transactions
