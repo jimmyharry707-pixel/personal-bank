@@ -11,7 +11,7 @@ It is a personal recordkeeping tool, not a bank, payment processor, brokerage, l
 - Dashboard with current account balances, monthly income and expenses, net cash flow, category spending, and recent activity.
 - Multiple local accounts: checking, savings, cash, credit card, investment, loan, and other.
 - Income, expense, transfer, and balance-adjustment transactions.
-- Transaction search, edit, delete, receipt attachments, CSV import, and CSV export.
+- Transaction search, edit, delete, receipt attachments, CSV import/export, and statement duplicate review with confirmed selective import.
 - Income and expense categories with archive support.
 - Monthly category budgets with spent, remaining, and utilization values.
 - Dashboard alerts for categories nearing or exceeding budget, with configurable warning and critical thresholds.

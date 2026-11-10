@@ -27,6 +27,7 @@ The tests create temporary database files and clean them up after each test clas
 - SQLite backup integrity
 - Restore into a new database
 - Receipt attachment validation, transaction-delete cascade, additive schema upgrade, and backup/restore
+- Statement matching by date/account/type/amount/transfer destination, duplicate rows, invalid rows, confidence scoring, and selective confirmed import
 
 ## Advanced finance tests
 

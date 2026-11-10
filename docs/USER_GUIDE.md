@@ -104,6 +104,8 @@ Account and category names must match existing records. The import preview displ
 
 Review an imported file before relying on it. Importing the same file twice creates duplicate transactions; this version does not perform bank-statement duplicate matching.
 
+For bank statements, use **Review statement matches** on the Transactions page. The review checks date, account, type, amount, and transfer destination, then scores reference and payee agreement. Possible ledger matches and repeated rows within the file are unchecked by default; unmatched valid rows are selected. Review the candidates, adjust the checkboxes as needed, and confirm the import. Matching is a heuristic, not a guarantee: always review the statement and never assume a suggested match is correct.
+
 ## Backups and restores
 
 Use **Create database backup** to save a copy of the SQLite database. Create backups regularly and before importing a large CSV file.

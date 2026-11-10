@@ -43,6 +43,8 @@ from .productivity import (
 )
 from .currency import CurrencyValuationService
 from .scenarios import FinancialScenarioService
+from .statement_import import StatementMatchingService
+from .statement_dialogs import StatementReviewDialog
 
 
 STYLE = """
@@ -122,6 +124,7 @@ class MainWindow(QMainWindow):
         self.finance = finance
         self.config = config
         self.csv_service = CsvService(finance)
+        self.statement_matching_service = StatementMatchingService(finance, self.csv_service)
         self.backup_service = BackupService(finance.db)
         self.attachment_service = ReceiptAttachmentService(finance)
         self.attachment_open_directory = tempfile.TemporaryDirectory(
@@ -378,11 +381,15 @@ class MainWindow(QMainWindow):
         import_button = QPushButton("Import CSV")
         import_button.setObjectName("secondary")
         import_button.clicked.connect(self.import_csv)
+        statement_button = QPushButton("Review statement matches")
+        statement_button.setObjectName("secondary")
+        statement_button.clicked.connect(self.review_statement_csv)
         row.addWidget(edit)
         row.addWidget(delete)
         row.addWidget(receipts)
         row.addStretch()
         row.addWidget(import_button)
+        row.addWidget(statement_button)
         row.addWidget(export)
         layout.addLayout(row)
 
@@ -1483,6 +1490,30 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self, "Import finished",
                 f"Imported: {result['imported']}\nSkipped: {result['skipped']}"
+                + (("\n\n" + "\n".join(result["errors"][:10])) if result["errors"] else ""),
+            )
+            self.refresh_all()
+        except Exception as exc:
+            self._show_error(exc)
+
+    def review_statement_csv(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Review bank statement", "", "CSV files (*.csv)"
+        )
+        if not path:
+            return
+        try:
+            dialog = StatementReviewDialog(
+                self, self.statement_matching_service, path
+            )
+            if dialog.exec() != QDialog.DialogCode.Accepted or dialog.import_result is None:
+                return
+            result = dialog.import_result
+            QMessageBox.information(
+                self,
+                "Statement import finished",
+                f"Selected: {result['selected']}\nImported: {result['imported']}\n"
+                f"Skipped: {result['skipped']}"
                 + (("\n\n" + "\n".join(result["errors"][:10])) if result["errors"] else ""),
             )
             self.refresh_all()

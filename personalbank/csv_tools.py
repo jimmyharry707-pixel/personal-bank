@@ -51,6 +51,9 @@ class CsvService:
 
     def import_transactions(self, path: str | Path, *, skip_invalid: bool = False) -> dict[str, Any]:
         rows = self.preview_import(path)
+        return self.import_rows(rows, skip_invalid=skip_invalid)
+
+    def import_rows(self, rows: list[dict[str, str]], *, skip_invalid: bool = False) -> dict[str, Any]:
         accounts = {row["name"].casefold(): int(row["id"]) for row in self.finance.accounts.list()}
         categories = {
             (row["name"].casefold(), row["kind"]): int(row["id"])
